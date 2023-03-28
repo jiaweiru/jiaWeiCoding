@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from .modules import (VectorQuantizerEMA1D, ConvSTFT, ConviSTFT, MultiHeadAttentionEncoder)
 
 
-class MagConvEncoder(nn.Module):
+class ConvEncoder(nn.Module):
     """
     MagEncoder
     """
@@ -14,13 +14,14 @@ class MagConvEncoder(nn.Module):
             self,
             kernel_size,
             kernel_stride,
-            kernel_num
+            kernel_num,
+            first_channel
     ):
-        super(MagConvEncoder, self).__init__()
+        super(ConvEncoder, self).__init__()
 
         self.kernel_size = kernel_size
         self.kernel_stride = kernel_stride
-        self.kernel_num = (1,) + kernel_num
+        self.kernel_num = (first_channel,) + kernel_num
 
         self.num_layers = len(self.kernel_size)
 
@@ -71,7 +72,7 @@ class MagConvEncoder(nn.Module):
         return out
 
 
-class MagConvDecoder(nn.Module):
+class ConvDecoder(nn.Module):
     """
     TransConv layers in decoder
     """
@@ -80,12 +81,13 @@ class MagConvDecoder(nn.Module):
             self,
             kernel_size,
             kernel_stride,
-            kernel_num
+            kernel_num,
+            first_channel
     ):
-        super(MagConvDecoder, self).__init__()
+        super(ConvDecoder, self).__init__()
         self.kernel_size = kernel_size
         self.kernel_stride = kernel_stride
-        self.kernel_num = (1,) + kernel_num
+        self.kernel_num = (first_channel,) + kernel_num
 
         self.num_layers = len(self.kernel_size)
 
@@ -353,18 +355,9 @@ class MPARN(nn.Module):
             fft_len=2048,
             win_type='hann',
             # fft params
-            kernel_size=None,
-            kernel_stride=None,
-            kernel_num=None,
-            rnn_layers=2,
-            rnn_units=128,
-            rnn_type='LSTM',
-            # rnn params
-            attn_layers=2,
-            n_heads=8,
-            # attn params
             # groups=64,
-            groups=48,
+            mag_groups=40,
+            phase_groups=8,
             bit_per_cbk=10,
             # VQ params
             comp_law='power-law',
@@ -379,44 +372,72 @@ class MPARN(nn.Module):
         self.win_type = win_type
         self.stft = ConvSTFT(self.win_len, self.win_inc, self.fft_len, self.win_type, 'complex')
         self.istft = ConviSTFT(self.win_len, self.win_inc, self.fft_len, self.win_type, 'complex')
+        
+        # Mag encoder and decoder params
+        self.mag_kernel_size = (7, 7, 7, 7)
+        self.mag_kernel_stride = (1, 4, 4, 4)
+        self.mag_kernel_num = (16, 32, 64, 80)
+        
+        self.mag_rnn_layers = 2
+        self.mag_rnn_units = 64
+        self.mag_rnn_type = 'LSTM'
+        mag_rnn_input_size = self.mag_kernel_num[-1]
+        
+        self.mag_attn_layers = 2
+        self.mag_n_heads = 8
+        mag_attn_input_size = self.mag_kernel_num[-1]
+        
+        self.mag_encoder = nn.Sequential(
+            ConvEncoder(self.mag_kernel_size, self.mag_kernel_stride, self.mag_kernel_num, 1),
+            FrequencyAttention(self.mag_attn_layers, mag_attn_input_size, mag_attn_input_size * 4, self.mag_n_heads, is_pe=True),
+            TemporalRNN(mag_rnn_input_size, self.mag_rnn_layers, self.mag_rnn_units, self.mag_rnn_type)
+        )
+        self.mag_decoder = nn.Sequential(
+            TemporalRNN(mag_rnn_input_size, self.mag_rnn_layers, self.mag_rnn_units, self.mag_rnn_type),
+            FrequencyAttention(self.mag_attn_layers, mag_attn_input_size, mag_attn_input_size * 4, self.mag_n_heads, is_pe=True),
+            ConvDecoder(self.mag_kernel_size, self.mag_kernel_stride, self.mag_kernel_num, 1)
+        )
 
-        if kernel_size is None:
-            kernel_size = (7, 7, 7, 7)
-        if kernel_stride is None:
-            kernel_stride = (1, 4, 4, 4)
-        if kernel_num is None:
-            # kernel_num = [16, 32, 64, 64]
-            kernel_num = (16, 32, 48, 48)
-        self.kernel_size = kernel_size
-        self.kernel_stride = kernel_stride
-        self.kernel_num = kernel_num
-        self.conv_encoder = ConvEncoder(self.kernel_size, self.kernel_stride, self.kernel_num, True)
-        self.conv_decoder = ConvDecoder(self.kernel_size, self.kernel_stride, self.kernel_num, True)
+        self.mag_embedding_dim = self.fft_len // 2
+        for stride in self.mag_kernel_stride:
+            self.mag_embedding_dim //= stride
+        self.mag_embedding_dim *= self.mag_kernel_num[-1]
+        
+        # Phase encoder and decoder params
+        self.phase_kernel_size = (7, 7, 7, 7)
+        self.phase_kernel_stride = (1, 4, 4, 4)
+        self.phase_kernel_num = (16, 16, 32, 32)
+        
+        # self.phase_rnn_layers = 2
+        # self.phase_rnn_units = 64
+        # self.phase_rnn_type = 'LSTM'
+        # phase_rnn_input_size = self.phase_kernel_num[-1]
+        
+        # self.phase_attn_layers = 2
+        # self.phase_n_heads = 8
+        # phase_attn_input_size = self.phase_kernel_num[-1]
+        
+        self.phase_encoder = nn.Sequential(
+            ConvEncoder(self.phase_kernel_size, self.phase_kernel_stride, self.phase_kernel_num, 2),
+            # FrequencyAttention(self.phase_attn_layers, phase_attn_input_size, phase_attn_input_size * 4, self.phase_n_heads, is_pe=True),
+            # TemporalRNN(phase_rnn_input_size, self.phase_rnn_layers, self.phase_rnn_units, self.phase_rnn_type)
+        )
+        self.phase_decoder = nn.Sequential(
+            # TemporalRNN(phase_rnn_input_size, self.phase_rnn_layers, self.phase_rnn_units, self.phase_rnn_type),
+            # FrequencyAttention(self.phase_attn_layers, phase_attn_input_size, phase_attn_input_size * 4, self.phase_n_heads, is_pe=True),
+            ConvDecoder(self.phase_kernel_size, self.phase_kernel_stride, self.phase_kernel_num, 2)
+        )
 
-        self.rnn_layers = rnn_layers
-        self.rnn_units = rnn_units
-        self.rnn_type = rnn_type
-        self.embedding_dim = self.fft_len // 2
-        for stride in self.kernel_stride:
-            self.embedding_dim //= stride
-        self.embedding_dim *= self.kernel_num[-1]
-        # rnn_input_size = self.embedding_dim
-        rnn_input_size = self.kernel_num[-1]
-
-        # print(rnn_input_size)
-        self.rnn_encoder = TemporalRNN(rnn_input_size, self.rnn_layers, self.rnn_units, self.rnn_type)
-        self.rnn_decoder = TemporalRNN(rnn_input_size, self.rnn_layers, self.rnn_units, self.rnn_type)
-
-        self.attn_layers = attn_layers
-        self.n_heads = n_heads
-        attn_input_size = self.kernel_num[-1]
-        self.attn_encoder = FrequencyAttention(self.attn_layers, attn_input_size, attn_input_size * 4, self.n_heads, is_pe=True)
-        self.attn_decoder = FrequencyAttention(self.attn_layers, attn_input_size, attn_input_size * 4, self.n_heads, is_pe=True)
-        # 4x in FFN
-
-        self.groups = groups
+        self.phase_embedding_dim = self.fft_len // 2
+        for stride in self.phase_kernel_stride:
+            self.phase_embedding_dim //= stride
+        self.phase_embedding_dim *= self.phase_kernel_num[-1]
+        
+        self.mag_groups = mag_groups
+        self.phase_groups = phase_groups
         self.bit_per_cbk = bit_per_cbk
-        self.vector_quantizer = GroupVectorQuantizer(self.embedding_dim, self.groups, self.bit_per_cbk, self.kernel_num[-1])
+        self.mag_vector_quantizer = GroupVectorQuantizer(self.mag_embedding_dim, self.mag_groups, self.bit_per_cbk, self.mag_kernel_num[-1])
+        self.phase_vector_quantizer = GroupVectorQuantizer(self.phase_embedding_dim, self.phase_groups, self.bit_per_cbk, self.phase_kernel_num[-1])
 
         self.comp_law = comp_law
         assert self.comp_law in ['power-law', 'log-law'], "Only support power-law and log-law"
@@ -439,29 +460,27 @@ class MPARN(nn.Module):
         else:
             specs_comp, mags_comp = None, None
         
-        out, _ = self.conv_encoder(specs_comp)
+        mags_feature = self.mag_encoder(mags_comp.unsqueeze(1))
+        phases_feature = self.phase_encoder(specs_comp)
 
-        res = self.attn_encoder(out)
-        out = torch.add(out, res)
-
-        res = self.rnn_encoder(out)
-        feature = torch.add(out, res)
-
-        indices = self.vector_quantizer.encode(feature)
+        mag_indices = self.mag_vector_quantizer.encode(mags_feature)
+        phase_indices = self.phase_vector_quantizer.encode(phases_feature)
         
-        return indices
+        return mag_indices + phase_indices
     
     def decode(self, indices):
         
-        quantized = self.vector_quantizer.decode(indices)
+        mag_indices = indices[:self.mag_groups]
+        phase_indices = indices[-self.phase_groups:]
+        
+        mags_quantized = self.mag_vector_quantizer.decode(mag_indices)
+        phases_quantized = self.phase_vector_quantizer.decode(phase_indices)
 
-        res = self.rnn_decoder(quantized)
-        out = torch.add(quantized, res)
-
-        res = self.attn_decoder(out)
-        out = torch.add(out, res)
-
-        est_specs_comp, _ = self.conv_decoder(out)
+        est_mags_comp = self.mag_decoder(mags_quantized)
+        est_phases = self.phase_decoder(phases_quantized)
+        est_phases = est_phases / (torch.sqrt(torch.abs(est_phases[:, 0]) ** 2 + torch.abs(est_phases[:, 1]) ** 2) + 1e-8).unsqueeze(1)
+        
+        est_specs_comp = est_mags_comp * est_phases
 
         if self.comp_law == 'power-law':
             est_specs, _, _ = power_law(est_specs_comp, 1. / self.alpha)
@@ -494,30 +513,17 @@ class MPARN(nn.Module):
         else:
             specs_comp, mags_comp = None, None
 
-        encoder_feature = []
-        decoder_feature = []
+        mags_feature = self.mag_encoder(mags_comp.unsqueeze(1))
+        mags_quantized, mags_quantized_detach = self.mag_vector_quantizer(mags_feature)
+        est_mags_comp = self.mag_decoder(mags_quantized)
+        
+        phases_feature = self.phase_encoder(specs_comp)
+        phases_quantized, phases_quantized_detach = self.phase_vector_quantizer(phases_feature)
+        est_phases = self.phase_decoder(phases_quantized)
+        est_phases = est_phases / (torch.sqrt(torch.abs(est_phases[:, 0]) ** 2 + torch.abs(est_phases[:, 1]) ** 2) + 1e-8).unsqueeze(1)
 
-        out, out_list = self.conv_encoder(specs_comp)
-        encoder_feature += out_list
-
-        res = self.attn_encoder(out)
-        out = torch.add(out, res)
-        encoder_feature.append(out)
-
-        res = self.rnn_encoder(out)
-        feature = torch.add(out, res)
-        quantized, quantized_detach = self.vector_quantizer(feature)
-
-        res = self.rnn_decoder(quantized)
-        out = torch.add(quantized, res)
-        decoder_feature.append(out)
-
-        res = self.attn_decoder(out)
-        out = torch.add(out, res)
-
-        est_specs_comp, out_list = self.conv_decoder(out)
-        decoder_feature += out_list
-
+        est_specs_comp = est_mags_comp * est_phases
+        
         if self.comp_law == 'power-law':
             est_specs, _, est_mags_comp = power_law(est_specs_comp, 1. / self.alpha)
         elif self.comp_law == 'log-law':
@@ -544,4 +550,4 @@ class MPARN(nn.Module):
         est_specs_comp = torch.cat((est_specs_comp[:, 0, :, :], est_specs_comp[:, 1, :, :]), dim=1)
         specs_comp = torch.cat((specs_comp[:, 0, :, :], specs_comp[:, 1, :, :]), dim=1)
         
-        return {"specs_comp": specs_comp, "est_specs_comp": est_specs_comp, "mags_comp": mags_comp, "est_mags_comp": est_mags_comp, "est_wav": out_wav, "raw_wav": x, "feature": feature, "quantized_feature": quantized_detach, "encoder_feature": encoder_feature, "decoder_feature": decoder_feature}
+        return {"specs_comp": specs_comp, "est_specs_comp": est_specs_comp, "mags_comp": mags_comp, "est_mags_comp": est_mags_comp, "est_wav": out_wav, "raw_wav": x, "mags_feature": mags_feature, "mags_quantized_feature": mags_quantized_detach,  "phases_feature": phases_feature, "phases_quantized_feature": phases_quantized_detach}

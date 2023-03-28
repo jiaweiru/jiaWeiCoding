@@ -107,3 +107,23 @@ def magri_feature_loss(predict_dict, cost_f=1, cost_m=0.1, lens=None, reduction=
         loss_match += mse_loss(e, d, length=lens, reduction=reduction)
 
     return cost_f * (loss_mag + loss_ri) + cost_m * loss_match
+
+
+def commit_loss_magphase(predict_dict, cost, lens=None, reduction="mean"):
+    """
+    Compute commitment loss for mag phase decoupled model between the input and the quantized feature.
+    Note that the quantized feature has no gradient attribute due to detach().
+
+    Args:
+        predict_dict (dict): A dictionary of predictions, including mags, specs, ... ,wavs.
+        reduction (str, optional): Reduction in speechbrain.nnet.losses.mse_loss. Defaults to "mean".
+    """
+
+    mags_feature, mags_feature_q = predict_dict["mags_feature"], predict_dict["mags_quantized_feature"]
+    mags_feature, mags_feature_q = mags_feature.permute(0, 3, 1, 2).contiguous(), mags_feature_q.permute(0, 3, 1, 2).contiguous()
+    phases_feature, phases_feature_q = predict_dict["phases_feature"], predict_dict["phases_quantized_feature"]
+    phases_feature, phases_feature_q = phases_feature.permute(0, 3, 1, 2).contiguous(), phases_feature_q.permute(0, 3, 1, 2).contiguous()
+    # [B, C, F, T] -> [B, T, C, F]
+    # Use speechbrain style to accommodate variable length training.
+
+    return mse_loss(mags_feature, mags_feature_q, length=lens, reduction=reduction) * cost / 2 + mse_loss(phases_feature, phases_feature_q, length=lens, reduction=reduction) * cost / 2
