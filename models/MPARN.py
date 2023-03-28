@@ -339,7 +339,7 @@ def log_law(x, inverse=False):
     return out, mag_comp, mag
 
 
-class ARN(nn.Module):
+class MPARN(nn.Module):
     """
     Magnitude Phase Attention-Recurrent Network for Neural Audio Coding (Real-valued version).
 
@@ -371,7 +371,7 @@ class ARN(nn.Module):
             alpha=0.5,
             # power-law factor
     ):
-        super(ARN, self).__init__()
+        super(MPARN, self).__init__()
 
         self.win_len = win_len
         self.win_inc = win_inc
