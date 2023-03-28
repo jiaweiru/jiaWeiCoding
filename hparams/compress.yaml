@@ -1,0 +1,43 @@
+bit_per_codebook: 10
+suffix: .cccc
+sample_rate: 44100
+stream_head: jiaweizuishuai
+identifier: jiaweiwudi
+device: 'cuda'
+ckpt_path: /home/ubuntu/Code/DCodec/results/audio/4234/ARN_853K_fmloss/save/CKPT+2023-03-28+09-38-56+00/model.ckpt
+
+win_length: 1764
+hop_length: 441
+n_fft: 2048
+window_type: hann
+
+audio_normalizer: !new:speechbrain.dataio.preprocess.AudioNormalizer
+    sample_rate: !ref <sample_rate>
+    mix: avg-to-mono
+
+model: !new:models.ARN
+    win_len: !ref <win_length>
+    win_inc: !ref <hop_length>
+    fft_len: !ref <n_fft>
+    win_type: !ref <window_type>
+    kernel_size: !tuple (7, 7, 7, 7)
+    kernel_stride: !tuple (1, 4, 4, 4)
+    kernel_num: !tuple (16, 32, 64, 96)
+    rnn_layers: 2
+    rnn_units: 64
+    rnn_type: LSTM
+    attn_layers: 2
+    n_heads: 8
+    groups: 48
+    bit_per_cbk: 10
+    comp_law: power-law
+    alpha: 0.5
+
+modules:
+    coder: !ref <model>
+
+pretrainer: !new:speechbrain.utils.parameter_transfer.Pretrainer
+    loadables:
+        coder: !ref <model>
+    paths:
+        coder: !ref <ckpt_path>

@@ -1,0 +1,142 @@
+# Seed needs to be set at top of yaml, before objects with parameters are made
+seed: 4234
+__set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
+
+# Set up folders for reading from and writing to
+# Dataset will be downloaded to the `data_folder`
+# If you plan to train a system on an HPC cluster with a big dataset,
+# we strongly suggest doing the following:
+# 1- Compress the dataset in a single tar or zip file.
+# 2- Copy your dataset locally (i.e., the local disk of the computing node).
+# 3- Uncompress the dataset in the local folder.
+# 4- Set data_folder with the local path.
+# Reading data from the local disk of the compute node (e.g. $SLURM_TMPDIR with SLURM-based clusters) is very important.
+# It allows you to read the data much faster without slowing down the shared filesystem.
+data_folder: /home/ubuntu/Code/CCodec/musdb18hq
+train_folder: !ref <data_folder>/train_mixture_3s_ChannelSplitting
+valid_folder: !ref <data_folder>/test_mixture_3s_ChannelSplitting
+test_folder: !ref <data_folder>/test_mixture_8s_ChannelSplitting
+json_folder: ./json
+
+output_folder: !ref ./results/audio/<seed>/ARN_853K_fmloss
+save_folder: !ref <output_folder>/save
+samples_folder: !ref <output_folder>/test_samples
+
+train_log: !ref <output_folder>/train_log.txt
+tensorboard_logs: !ref <output_folder>/tb_logs
+
+# Path where data manifest files will be stored
+# The data manifest files are created by the data preparation script.
+train_annotation: !ref <json_folder>/audio_train.json
+valid_annotation: !ref <json_folder>/audio_valid.json
+test_annotation: !ref <json_folder>/audio_test.json
+
+# The train logger writes training statistics to a file, as well as stdout.
+train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
+    save_file: !ref <train_log>
+
+tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
+    save_dir: !ref <tensorboard_logs>
+
+# FFT parameters
+sample_rate: 44100
+win_length: 1764
+hop_length: 441
+n_fft: 2048
+window_type: hann
+window_fn: !name:torch.hann_window
+
+# Training Parameters
+number_of_epochs: 400
+batch_size: 32
+learning_rate: 0.001
+device: 'cuda:0'
+max_grad_norm: 5.0
+
+# Test stage:
+# Visualize and save the first few audios
+log_save: 5
+
+train_dataloader_options:
+    batch_size: !ref <batch_size>
+    shuffle: True
+
+valid_dataloader_options:
+    batch_size: !ref <batch_size>
+    shuffle: False
+
+test_dataloader_options:
+    batch_size: 1
+    shuffle: False
+
+compute_cost_recon: !name:models.magri_feature_loss
+    cost_m: 0.01
+compute_cost_commit: !name:models.commit_loss
+commit_cost: 0.1
+
+# model: !new:models.DCARN
+#     win_len: !ref <win_length>
+#     win_inc: !ref <hop_length>
+#     fft_len: !ref <n_fft>
+#     win_type: !ref <window_type>
+#     kernel_size: !tuple (7, 7, 7, 7)
+#     kernel_stride: !tuple (1, 4, 4, 4)
+#     kernel_num: !tuple (16, 32, 48, 48)
+#     rnn_layers: 2
+#     rnn_units: 128
+#     rnn_type: LSTM
+#     attn_layers: 2
+#     n_heads: 8
+#     groups: 48
+#     bit_per_cbk: 10
+#     comp_law: power-law
+#     alpha: 0.5
+
+model: !new:models.ARN
+    win_len: !ref <win_length>
+    win_inc: !ref <hop_length>
+    fft_len: !ref <n_fft>
+    win_type: !ref <window_type>
+    kernel_size: !tuple (7, 7, 7, 7)
+    kernel_stride: !tuple (1, 4, 4, 4)
+    kernel_num: !tuple (16, 32, 64, 96)
+    rnn_layers: 2
+    rnn_units: 64
+    rnn_type: LSTM
+    attn_layers: 2
+    n_heads: 8
+    groups: 48
+    bit_per_cbk: 10
+    comp_law: power-law
+    alpha: 0.5
+
+# The first object passed to the Brain class is this "Epoch Counter"
+# which is saved by the Checkpointer so that training can be resumed
+# if it gets interrupted at any point.
+epoch_counter: !new:speechbrain.utils.epoch_loop.EpochCounter
+    limit: !ref <number_of_epochs>
+
+# Objects in "modules" dict will have their parameters moved to the correct
+# device, as well as having train()/eval() called on them by the Brain class.
+modules:
+    model: !ref <model>
+
+# This optimizer will be constructed by the Brain class after all parameters
+# are moved to the correct device. Then it will be added to the checkpointer.
+opt_class: !name:torch.optim.Adam
+    lr: !ref <learning_rate>
+
+sched: False
+lr_scheduler: !new:speechbrain.nnet.schedulers.ReduceLROnPlateau
+    factor: 0.9
+    patience: 3
+    dont_halve_until_epoch: 0
+
+# This object is used for saving the state of training both so that it
+# can be resumed if it gets interrupted, and also so that the best checkpoint
+# can be later loaded for evaluation or inference.
+checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
+    checkpoints_dir: !ref <save_folder>
+    recoverables:
+        model: !ref <model>
+        counter: !ref <epoch_counter>
