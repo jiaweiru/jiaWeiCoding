@@ -285,11 +285,11 @@ if __name__ == "__main__":
     # with changing state are managed by the Checkpointer, training can be
     # stopped at any point, and will be resumed on next call.
     nc_brain.fit(
-        epoch_counter=nc_brain.hparams.epoch_counter,
-        train_set=datasets["train"],
-        valid_set=datasets["valid"],
-        train_loader_kwargs=hparams["train_dataloader_options"],
-        valid_loader_kwargs=hparams["valid_dataloader_options"],
+            epoch_counter=nc_brain.hparams.epoch_counter,
+            train_set=datasets["train"],
+            valid_set=datasets["valid"],
+            train_loader_kwargs=hparams["train_dataloader_options"],
+            valid_loader_kwargs=hparams["valid_dataloader_options"],
     )
 
     # Load best checkpoint (highest SISNR) for evaluation

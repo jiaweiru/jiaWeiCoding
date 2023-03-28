@@ -126,4 +126,4 @@ def commit_loss_magphase(predict_dict, cost, lens=None, reduction="mean"):
     # [B, C, F, T] -> [B, T, C, F]
     # Use speechbrain style to accommodate variable length training.
 
-    return mse_loss(mags_feature, mags_feature_q, length=lens, reduction=reduction) * cost / 2 + mse_loss(phases_feature, phases_feature_q, length=lens, reduction=reduction) * cost / 2
+    return mse_loss(mags_feature, mags_feature_q, length=lens, reduction=reduction) * cost / 2. + mse_loss(phases_feature, phases_feature_q, length=lens, reduction=reduction) * cost / 2.
