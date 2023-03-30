@@ -16,7 +16,8 @@ class ConvEncoder(nn.Module):
             kernel_size,
             kernel_stride,
             kernel_num,
-            layer_output
+            layer_output,
+            causal=True
     ):
         super(ConvEncoder, self).__init__()
 
@@ -26,6 +27,9 @@ class ConvEncoder(nn.Module):
 
         self.num_layers = len(self.kernel_size)
 
+        self.layer_output = layer_output
+        self.causal = causal
+        
         self.module_list = nn.ModuleList()
         for idx in range(self.num_layers):
             if idx == 0:
@@ -35,7 +39,7 @@ class ConvEncoder(nn.Module):
                         nn.Conv2d(
                             self.kernel_num[idx],
                             self.kernel_num[idx + 1],
-                            kernel_size=(self.kernel_size[idx], 2),
+                            kernel_size=(self.kernel_size[idx], 2 if self.causal else 3),
                             stride=(self.kernel_stride[idx], 1),
                             padding=(self.kernel_size[idx] // 2 - 1, 1)
                         ),
@@ -49,7 +53,7 @@ class ConvEncoder(nn.Module):
                         nn.Conv2d(
                             self.kernel_num[idx],
                             self.kernel_num[idx + 1],
-                            kernel_size=(self.kernel_size[idx], 2),
+                            kernel_size=(self.kernel_size[idx], 2 if self.causal else 3),
                             stride=(self.kernel_stride[idx], 1),
                             padding=(self.kernel_size[idx] // 2, 1)
                         ),
@@ -57,7 +61,6 @@ class ConvEncoder(nn.Module):
                         nn.PReLU()
                     )
                 )
-        self.layer_output = layer_output
 
     def forward(self, x):
         """
@@ -70,7 +73,8 @@ class ConvEncoder(nn.Module):
 
         for layer in self.module_list:
             out = layer(out)
-            out = out[..., :-1]
+            if self.causal:
+                out = out[..., :-1]
             # print(out.shape)
 
             if self.layer_output:
@@ -92,7 +96,8 @@ class ConvDecoder(nn.Module):
             kernel_size,
             kernel_stride,
             kernel_num,
-            layer_output
+            layer_output,
+            causal
     ):
         super(ConvDecoder, self).__init__()
         self.kernel_size = kernel_size
@@ -100,6 +105,9 @@ class ConvDecoder(nn.Module):
         self.kernel_num = (2,) + kernel_num
 
         self.num_layers = len(self.kernel_size)
+        
+        self.layer_output = layer_output
+        self.causal = causal
 
         self.module_list = nn.ModuleList()
         for idx in range(self.num_layers, 0, -1):
@@ -110,7 +118,7 @@ class ConvDecoder(nn.Module):
                         nn.ConvTranspose2d(
                             self.kernel_num[idx],
                             self.kernel_num[idx - 1],
-                            kernel_size=(self.kernel_size[idx - 1], 2),
+                            kernel_size=(self.kernel_size[idx - 1], 2 if self.causal else 3),
                             stride=(self.kernel_stride[idx - 1], 1),
                             padding=(self.kernel_size[idx - 1] // 2, 0),
                             output_padding=(self.kernel_stride[idx - 1] - 1, 0)
@@ -125,15 +133,13 @@ class ConvDecoder(nn.Module):
                         nn.ConvTranspose2d(
                             self.kernel_num[idx],
                             self.kernel_num[idx - 1],
-                            kernel_size=(self.kernel_size[idx - 1], 2),
+                            kernel_size=(self.kernel_size[idx - 1], 2 if self.causal else 3),
                             stride=(self.kernel_stride[idx - 1], 1),
                             padding=(self.kernel_size[idx - 1] // 2 - 1, 0),
                             output_padding=(self.kernel_stride[idx - 1] - 1, 0)
                         ),
                     )
                 )
-
-        self.layer_output = layer_output
 
     def forward(self, x):
         """
@@ -146,7 +152,8 @@ class ConvDecoder(nn.Module):
 
         for idx, layer in enumerate(self.module_list):
             out = layer(out)
-            out = out[..., :-1]
+            if self.causal:
+                out = out[..., :-1]
             if idx != self.num_layers - 1:
                 if self.layer_output:
                     out_list.append(out)
@@ -173,13 +180,14 @@ class TemporalRNN(nn.Module):
             rnn_layers,
             rnn_units,
             rnn_type,
+            causal
     ):
         super(TemporalRNN, self).__init__()
 
         self.input_size = input_size
         self.rnn_layers = rnn_layers
         self.rnn_units = rnn_units
-        self.bidirectional = False
+        self.bidirectional = not causal
 
         if rnn_type == 'LSTM':
             self.rnn = nn.LSTM(self.input_size, self.rnn_units, self.rnn_layers, batch_first=True, bidirectional=self.bidirectional)
@@ -392,9 +400,12 @@ class ARN(nn.Module):
             comp_law='power-law',
             alpha=0.5,
             # power-law factor
+            causal=True
     ):
         super(ARN, self).__init__()
 
+        self.causal = causal
+        
         self.win_len = win_len
         self.win_inc = win_inc
         self.fft_len = fft_len
@@ -412,8 +423,8 @@ class ARN(nn.Module):
         self.kernel_size = kernel_size
         self.kernel_stride = kernel_stride
         self.kernel_num = kernel_num
-        self.conv_encoder = ConvEncoder(self.kernel_size, self.kernel_stride, self.kernel_num, True)
-        self.conv_decoder = ConvDecoder(self.kernel_size, self.kernel_stride, self.kernel_num, True)
+        self.conv_encoder = ConvEncoder(self.kernel_size, self.kernel_stride, self.kernel_num, True, self.causal)
+        self.conv_decoder = ConvDecoder(self.kernel_size, self.kernel_stride, self.kernel_num, True, self.causal)
 
         self.rnn_layers = rnn_layers
         self.rnn_units = rnn_units
@@ -426,8 +437,8 @@ class ARN(nn.Module):
         rnn_input_size = self.kernel_num[-1]
 
         # print(rnn_input_size)
-        self.rnn_encoder = TemporalRNN(rnn_input_size, self.rnn_layers, self.rnn_units, self.rnn_type)
-        self.rnn_decoder = TemporalRNN(rnn_input_size, self.rnn_layers, self.rnn_units, self.rnn_type)
+        self.rnn_encoder = TemporalRNN(rnn_input_size, self.rnn_layers, self.rnn_units, self.rnn_type, self.causal)
+        self.rnn_decoder = TemporalRNN(rnn_input_size, self.rnn_layers, self.rnn_units, self.rnn_type, self.causal)
 
         self.attn_layers = attn_layers
         self.n_heads = n_heads
