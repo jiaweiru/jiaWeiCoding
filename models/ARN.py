@@ -5,6 +5,8 @@ import torch.nn.functional as F
 from .modules import (VectorQuantizerEMA1D, ConvSTFT, ConviSTFT, MultiHeadAttentionEncoder)
 
 
+EPSILON = torch.finfo(torch.float32).eps
+
 class ConvEncoder(nn.Module):
     """
     Real-valued Conv layers in encoder
@@ -120,7 +122,7 @@ class ConvDecoder(nn.Module):
                             self.kernel_num[idx - 1],
                             kernel_size=(self.kernel_size[idx - 1], 2 if self.causal else 3),
                             stride=(self.kernel_stride[idx - 1], 1),
-                            padding=(self.kernel_size[idx - 1] // 2, 0),
+                            padding=(self.kernel_size[idx - 1] // 2, 0 if self.causal else 1),
                             output_padding=(self.kernel_stride[idx - 1] - 1, 0)
                         ),
                         nn.BatchNorm2d(self.kernel_num[idx - 1]),
@@ -135,7 +137,7 @@ class ConvDecoder(nn.Module):
                             self.kernel_num[idx - 1],
                             kernel_size=(self.kernel_size[idx - 1], 2 if self.causal else 3),
                             stride=(self.kernel_stride[idx - 1], 1),
-                            padding=(self.kernel_size[idx - 1] // 2 - 1, 0),
+                            padding=(self.kernel_size[idx - 1] // 2 - 1, 0 if self.causal else 1),
                             output_padding=(self.kernel_stride[idx - 1] - 1, 0)
                         ),
                     )
@@ -339,7 +341,7 @@ def power_law(x, alpha=0.5):
     """
     real = x[:, 0, :, :]
     imag = x[:, 1, :, :]
-    mag = torch.sqrt(real ** 2 + imag ** 2 + 1e-8)
+    mag = torch.sqrt(real ** 2 + imag ** 2 + EPSILON)
     phase = torch.atan2(imag, real)
     mag_comp = torch.pow(mag, alpha)
     real = mag_comp * torch.cos(phase)
@@ -356,7 +358,7 @@ def log_law(x, inverse=False):
     """
     real = x[:, 0, :, :]
     imag = x[:, 1, :, :]
-    mag = torch.sqrt(real ** 2 + imag ** 2 + 1e-8)
+    mag = torch.sqrt(real ** 2 + imag ** 2 + EPSILON)
     phase = torch.atan2(imag, real)
     if not inverse:
         mag_comp = torch.log1p(mag)

@@ -5,6 +5,8 @@ import torch.nn.functional as F
 from .modules import ConvSTFT, ConviSTFT, VectorQuantizerEMA1D
 
 
+EPSILON = torch.finfo(torch.float32).eps
+
 class ConvEncoder(nn.Module):
     def __init__(self):
         super(ConvEncoder, self).__init__()
@@ -256,7 +258,7 @@ def power_law(x, alpha=0.5):
     """
     real = x[:, 0, :, :]
     imag = x[:, 1, :, :]
-    mag = torch.sqrt(real ** 2 + imag ** 2 + 1e-8)
+    mag = torch.sqrt(real ** 2 + imag ** 2 + EPSILON)
     phase = torch.atan2(imag, real)
     mag_comp = torch.pow(mag, alpha)
     real = mag_comp * torch.cos(phase)
