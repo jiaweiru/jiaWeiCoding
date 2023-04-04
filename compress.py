@@ -78,10 +78,30 @@ class NeuralCoding(Pretrained):
         """
         # Fake batch for model forward.
         wav = self.load_audio(str(input_path)).unsqueeze(0).to(self.device)
+        compressed = self.audio2comp(wav)
 
+        output_path = output_path.joinpath(input_path.stem + self.suffix)
+        output_path.write_bytes(compressed)
+
+    def decompress(self, input_path: Path, output_path: Path):
+        """
+        Decompress the target file.
+
+        Args:
+            input_path (Path): Compressed format audio files.
+            output_path (Path): Target Directory.
+        """
+        compressed = input_path.read_bytes()
+        wav = self.comp2audio(compressed).to(self.device)
+
+        output_path = output_path.joinpath(input_path.stem + ".wav")
+        torchaudio.save(str(output_path), wav, sample_rate=self.sample_rate, bits_per_sample=16)
+
+    def audio2comp(self, audio):
+        
         with torch.no_grad():
             # A list of [B, T,], len of the list is the number of the codebooks.
-            indices_list = self.mods.coder.encode(wav)
+            indices_list = self.mods.coder.encode(audio)
             # Reshape to [B, T, K]
             indices = torch.stack(indices_list, dim=-1)
         
@@ -104,19 +124,11 @@ class NeuralCoding(Pretrained):
         packer.flush()
 
         compressed = fo.getvalue()
+        
+        return compressed
+        
+    def comp2audio(self, compressed):
 
-        output_path = output_path.joinpath(input_path.stem + self.suffix)
-        output_path.write_bytes(compressed)
-
-    def decompress(self, input_path: Path, output_path: Path):
-        """
-        Decompress the target file.
-
-        Args:
-            input_path (Path): Compressed format audio files.
-            output_path (Path): Target Directory.
-        """
-        compressed = input_path.read_bytes()
         fo = io.BytesIO(compressed)
         unpacker = BitUnpacker(self.bit_per_codebook, fo)
 
@@ -140,13 +152,9 @@ class NeuralCoding(Pretrained):
             indices_list = torch.tensor(indices_list, dtype=torch.long, device=self.device).unsqueeze(0)
             indices_list = [indices_list[:, :, i] for i in range(num_cbks)]
             wav = self.mods.coder.decode(indices_list).squeeze(0)
-
-        output_path = output_path.joinpath(input_path.stem + ".wav")
-        if self.device != 'cpu':
-            wav =wav.to('cpu')
-        torchaudio.save(str(output_path), wav, sample_rate=self.sample_rate, bits_per_sample=16)
-
-
+        
+        return wav
+            
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(

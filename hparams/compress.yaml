@@ -3,8 +3,8 @@ suffix: .cccc
 sample_rate: 44100
 stream_head: jiaweizuishuai
 identifier: jiaweiwudi
-device: 'cuda'
-ckpt_path: /home/ubuntu/Code/DCodec/results/audio/4234/ARN_853K_fmloss/save/CKPT+2023-03-28+09-38-56+00/model.ckpt
+device: cpu
+ckpt_path: /home/ubuntu/Code/DCodec/results/audio/4234/ARN_noncausal_baseline/save/CKPT+2023-04-02+12-23-11+00/model.ckpt
 
 win_length: 1764
 hop_length: 441
@@ -32,6 +32,7 @@ model: !new:models.ARN
     bit_per_cbk: 10
     comp_law: power-law
     alpha: 0.5
+    causal: False
 
 modules:
     coder: !ref <model>

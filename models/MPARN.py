@@ -142,6 +142,29 @@ class ConvDecoder(nn.Module):
         return out
     
 
+class Interaction(nn.Module):
+    """
+    Interaction between magnitude branch and phase branch.
+    """
+    def __init__(self, input_size):
+        super().__init__()
+        self.inter = nn.Sequential(
+            nn.Conv2d(2 * input_size, input_size, kernel_size=(1, 1)),
+            nn.BatchNorm2d(input_size),
+            nn.Sigmoid()
+        )
+
+    def forward(self, input1, input2):
+        """
+        input1: Primary branch
+        input2: Secondary branch
+        """
+        input_merge = torch.cat((input1, input2), dim=1)
+        output_mask = self.inter(input_merge)
+        output = input1 + input2 * output_mask
+        return output
+        
+
 class TemporalRNN(nn.Module):
     """
     LSTM or GRU for temporal filtering
@@ -358,8 +381,8 @@ class MPARN(nn.Module):
             win_type='hann',
             # fft params
             # groups=64,
-            mag_groups=48,
-            phase_groups=48,
+            mag_groups=32,
+            phase_groups=32,
             bit_per_cbk=10,
             # VQ params
             comp_law='power-law',
@@ -378,7 +401,7 @@ class MPARN(nn.Module):
         # Mag encoder and decoder params
         self.mag_kernel_size = (7, 7, 7, 7)
         self.mag_kernel_stride = (1, 4, 4, 4)
-        self.mag_kernel_num = (16, 32, 64, 96)
+        self.mag_kernel_num = (16, 32, 64, 128)
         
         self.mag_rnn_layers = 2
         self.mag_rnn_units = 64
@@ -389,17 +412,12 @@ class MPARN(nn.Module):
         self.mag_n_heads = 8
         mag_attn_input_size = self.mag_kernel_num[-1]
         
-        self.mag_encoder = nn.Sequential(
-            ConvEncoder(self.mag_kernel_size, self.mag_kernel_stride, self.mag_kernel_num, 1),
-            # FrequencyAttention(self.mag_attn_layers, mag_attn_input_size, mag_attn_input_size * 4, self.mag_n_heads, is_pe=True),
-            # TemporalRNN(mag_rnn_input_size, self.mag_rnn_layers, self.mag_rnn_units, self.mag_rnn_type)
-        )
-        self.mag_decoder = nn.Sequential(
-            # TemporalRNN(mag_rnn_input_size, self.mag_rnn_layers, self.mag_rnn_units, self.mag_rnn_type),
-            # FrequencyAttention(self.mag_attn_layers, mag_attn_input_size, mag_attn_input_size * 4, self.mag_n_heads, is_pe=True),
-            ConvDecoder(self.mag_kernel_size, self.mag_kernel_stride, self.mag_kernel_num, 1)
-        )
-
+        self.mag_en_conv = ConvEncoder(self.mag_kernel_size, self.mag_kernel_stride, self.mag_kernel_num, 1)
+        self.mag_en_fa = FrequencyAttention(self.mag_attn_layers, mag_attn_input_size, mag_attn_input_size * 4, self.mag_n_heads, is_pe=True)
+        self.mag_en_tr = TemporalRNN(mag_rnn_input_size, self.mag_rnn_layers, self.mag_rnn_units, self.mag_rnn_type)
+        self.mag_de_tr = TemporalRNN(mag_rnn_input_size, self.mag_rnn_layers, self.mag_rnn_units, self.mag_rnn_type)
+        self.mag_de_fa = FrequencyAttention(self.mag_attn_layers, mag_attn_input_size, mag_attn_input_size * 4, self.mag_n_heads, is_pe=True)
+        self.mag_de_conv = ConvDecoder(self.mag_kernel_size, self.mag_kernel_stride, self.mag_kernel_num, 1)
         self.mag_embedding_dim = self.fft_len // 2
         for stride in self.mag_kernel_stride:
             self.mag_embedding_dim //= stride
@@ -408,7 +426,7 @@ class MPARN(nn.Module):
         # Phase encoder and decoder params
         self.phase_kernel_size = (7, 7, 7, 7)
         self.phase_kernel_stride = (1, 4, 4, 4)
-        self.phase_kernel_num = (16, 32, 64, 96)
+        self.phase_kernel_num = (16, 32, 64, 128)
         
         self.phase_rnn_layers = 2
         self.phase_rnn_units = 64
@@ -419,16 +437,12 @@ class MPARN(nn.Module):
         self.phase_n_heads = 8
         phase_attn_input_size = self.phase_kernel_num[-1]
         
-        self.phase_encoder = nn.Sequential(
-            ConvEncoder(self.phase_kernel_size, self.phase_kernel_stride, self.phase_kernel_num, 2),
-            FrequencyAttention(self.phase_attn_layers, phase_attn_input_size, phase_attn_input_size * 4, self.phase_n_heads, is_pe=True),
-            TemporalRNN(phase_rnn_input_size, self.phase_rnn_layers, self.phase_rnn_units, self.phase_rnn_type)
-        )
-        self.phase_decoder = nn.Sequential(
-            TemporalRNN(phase_rnn_input_size, self.phase_rnn_layers, self.phase_rnn_units, self.phase_rnn_type),
-            FrequencyAttention(self.phase_attn_layers, phase_attn_input_size, phase_attn_input_size * 4, self.phase_n_heads, is_pe=True),
-            ConvDecoder(self.phase_kernel_size, self.phase_kernel_stride, self.phase_kernel_num, 2)
-        )
+        self.phase_en_conv = ConvEncoder(self.phase_kernel_size, self.phase_kernel_stride, self.phase_kernel_num, 2)
+        self.phase_en_fa = FrequencyAttention(self.phase_attn_layers, phase_attn_input_size, phase_attn_input_size * 4, self.phase_n_heads, is_pe=True)
+        self.phase_en_tr = TemporalRNN(phase_rnn_input_size, self.phase_rnn_layers, self.phase_rnn_units, self.phase_rnn_type)
+        self.phase_de_tr = TemporalRNN(phase_rnn_input_size, self.phase_rnn_layers, self.phase_rnn_units, self.phase_rnn_type)
+        self.phase_de_fa = FrequencyAttention(self.phase_attn_layers, phase_attn_input_size, phase_attn_input_size * 4, self.phase_n_heads, is_pe=True)
+        self.phase_de_conv = ConvDecoder(self.phase_kernel_size, self.phase_kernel_stride, self.phase_kernel_num, 2)
 
         self.phase_embedding_dim = self.fft_len // 2
         for stride in self.phase_kernel_stride:
@@ -447,54 +461,6 @@ class MPARN(nn.Module):
             self.alpha = alpha
         elif self.comp_law == 'log-law':
             pass
-    
-    def encode(self, x):
-
-        specs = self.stft(x)
-        real = specs[:, :self.fft_len // 2 + 1]
-        imag = specs[:, self.fft_len // 2 + 1:]
-        specs = torch.stack([real, imag], dim=1)
-
-        if self.comp_law == 'power-law':
-            specs_comp, mags_comp, _ = power_law(specs, self.alpha)
-        elif self.comp_law == 'log-law':
-            specs_comp, mags_comp, _ = log_law(specs)
-        else:
-            specs_comp, mags_comp = None, None
-        
-        mags_feature = self.mag_encoder(mags_comp.unsqueeze(1))
-        phases_feature = self.phase_encoder(specs_comp)
-
-        mag_indices = self.mag_vector_quantizer.encode(mags_feature)
-        phase_indices = self.phase_vector_quantizer.encode(phases_feature)
-        
-        return mag_indices + phase_indices
-    
-    def decode(self, indices):
-        
-        mag_indices = indices[:self.mag_groups]
-        phase_indices = indices[-self.phase_groups:]
-        
-        mags_quantized = self.mag_vector_quantizer.decode(mag_indices)
-        phases_quantized = self.phase_vector_quantizer.decode(phase_indices)
-
-        est_mags_comp = self.mag_decoder(mags_quantized)
-        est_phases = self.phase_decoder(phases_quantized)
-        est_phases = est_phases / (torch.sqrt(torch.abs(est_phases[:, 0]) ** 2 + torch.abs(est_phases[:, 1]) ** 2 + EPSILON) + EPSILON).unsqueeze(1)
-        
-        est_specs_comp = est_mags_comp * est_phases
-
-        if self.comp_law == 'power-law':
-            est_specs, _, _ = power_law(est_specs_comp, 1. / self.alpha)
-        elif self.comp_law == 'log-law':
-            est_specs, _, _ = log_law(est_specs_comp, inverse=True)
-        else:
-            est_specs = None
-
-        out_wav = self.istft(est_specs.reshape(est_specs.shape[0], -1, est_specs.shape[-1]))
-        out_wav = torch.clamp_(out_wav, -1, 1)
-
-        return out_wav
 
     def forward(self, x):
         """
@@ -519,7 +485,8 @@ class MPARN(nn.Module):
         mags_quantized, mags_quantized_detach = self.mag_vector_quantizer(mags_feature)
         est_mags_comp = self.mag_decoder(mags_quantized)
         
-        phases_feature = self.phase_encoder(specs_comp)
+        phases = specs_comp / (torch.sqrt(torch.abs(specs_comp[:, 0]) ** 2 + torch.abs(specs_comp[:, 1]) ** 2 + EPSILON) + EPSILON).unsqueeze(1)
+        phases_feature = self.phase_encoder(phases)
         phases_quantized, phases_quantized_detach = self.phase_vector_quantizer(phases_feature)
         est_phases = self.phase_decoder(phases_quantized)
         est_phases = est_phases / (torch.sqrt(torch.abs(est_phases[:, 0]) ** 2 + torch.abs(est_phases[:, 1]) ** 2 + EPSILON) + EPSILON).unsqueeze(1)
