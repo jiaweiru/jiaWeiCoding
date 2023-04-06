@@ -132,7 +132,7 @@ class NCBrain(sb.Brain):
             
             if stage == sb.Stage.TEST:
                 self.pesq_metric = sb.utils.metric_stats.MetricStats(
-                    metric=pesq_eval, n_jobs=self.hparams.n_jobs, batch_eval=False
+                    metric=pesq_eval, n_jobs=self.hparams.pesq_n_jobs, batch_eval=False
                 )
         
 
