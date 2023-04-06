@@ -95,7 +95,7 @@ class NeuralCoding(Pretrained):
         wav = self.comp2audio(compressed).to(self.device)
 
         output_path = output_path.joinpath(input_path.stem + ".wav")
-        torchaudio.save(str(output_path), wav, sample_rate=self.sample_rate, bits_per_sample=16)
+        torchaudio.save(str(output_path), wav.cpu(), sample_rate=self.sample_rate, bits_per_sample=16)
 
     def audio2comp(self, audio):
         

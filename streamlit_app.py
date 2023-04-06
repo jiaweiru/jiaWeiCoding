@@ -1,7 +1,6 @@
 import streamlit as st
 
 import io
-import librosa
 import torchaudio
 
 from compress import NeuralCoding
@@ -17,26 +16,24 @@ def load_coder(source='/home/ubuntu/Code/DCodec/hparams',
                hparams='compress.yaml',
                pretrained_dir='./pretrained_streamlit'):
     
-    coder = NeuralCoding.from_hparams(source=source, hparams_file=hparams, savedir=pretrained_dir, pymodule_file='')
-
-    return coder
+    return NeuralCoding.from_hparams(source=source, hparams_file=hparams, savedir=pretrained_dir, pymodule_file='')
 
 @st.cache_data
-def compress(audio_file):
+def compress(file):
     
-    audio, sr = torchaudio.load(audio_file)
-    audio = audio.unsqueeze(0).to(coder.device)
+    audio, sr = torchaudio.load(file, channels_first=False)
+    audio = coder.audio_normalizer(audio, sr).unsqueeze(0).to(coder.device)
     comp = coder.audio2comp(audio)
     
     return comp
 
 @st.cache_data
-def decompress(comp_file):
+def decompress(file):
     
-    compressed = comp_file.getvalue()
+    compressed = file.getvalue()
     audio_rec = coder.comp2audio(compressed)
     fo = io.BytesIO()
-    torchaudio.save(fo, audio_rec, SAMPLE_RATE, format='wav', bits_per_sample=16)
+    torchaudio.save(fo, audio_rec.cpu(), SAMPLE_RATE, format='wav', bits_per_sample=16)
     
     return fo
     

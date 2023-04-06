@@ -3,7 +3,7 @@ suffix: .cccc
 sample_rate: 44100
 stream_head: jiaweizuishuai
 identifier: jiaweiwudi
-device: cpu
+device: cuda
 ckpt_path: /home/ubuntu/Code/DCodec/results/audio/4234/ARN_noncausal_baseline/save/CKPT+2023-04-02+12-23-11+00/model.ckpt
 
 win_length: 1764
