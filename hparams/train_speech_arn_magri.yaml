@@ -39,9 +39,9 @@ tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
     save_dir: !ref <tensorboard_logs>
 
 # Training Parameters
-number_of_epochs: 300
+number_of_epochs: 200
 batch_size: 200
-learning_rate: 0.0003
+learning_rate: 0.001
 device: 'cuda:0'
 max_grad_norm: 5.0
 
@@ -67,7 +67,7 @@ test_dataloader_options:
     batch_size: 1
     shuffle: False
 
-compute_cost_recon: !name:models.ri_loss
+compute_cost_recon: !name:models.magri_loss
 compute_cost_commit: !name:models.commit_loss
 commit_cost: 0.1
 
@@ -76,7 +76,7 @@ model: !new:models.ARN
     win_inc: !ref <hop_length>
     fft_len: !ref <n_fft>
     win_type: !ref <win_type>
-    kernel_size: !tuple (5, 7, 7, 5)
+    kernel_size: !tuple (5, 5, 5, 5)
     kernel_stride: !tuple (1, 4, 4, 2)
     kernel_num: !tuple (16, 32, 48, 48)
     rnn_layers: 2
