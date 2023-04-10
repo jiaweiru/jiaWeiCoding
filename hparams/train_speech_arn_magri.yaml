@@ -18,7 +18,7 @@ valid_folder: !ref <data_folder>/dev-clean_split
 test_folder: !ref <data_folder>/test-clean
 json_folder: ./json
 
-output_folder: !ref ./results/speech/<seed>/ARN
+output_folder: !ref ./results/speech/<seed>/ARN_v2
 save_folder: !ref <output_folder>/save
 samples_folder: !ref <output_folder>/test_samples
 
@@ -78,7 +78,7 @@ model: !new:models.ARN
     win_type: !ref <win_type>
     kernel_size: !tuple (5, 5, 5, 5)
     kernel_stride: !tuple (1, 4, 4, 2)
-    kernel_num: !tuple (16, 32, 48, 48)
+    kernel_num: !tuple (16, 32, 64, 120)
     rnn_layers: 2
     rnn_units: 64
     rnn_type: LSTM
