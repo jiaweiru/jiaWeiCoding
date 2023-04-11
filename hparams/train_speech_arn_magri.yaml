@@ -42,7 +42,6 @@ tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
 number_of_epochs: 200
 batch_size: 128
 learning_rate: 0.0003
-device: 'cuda:0'
 max_grad_norm: 5.0
 
 # Test stage:
