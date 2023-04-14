@@ -52,8 +52,8 @@ class NCBrain(sb.Brain):
         raw_wav, lens = batch.wav
 
         # Total loss consists of loss_rencon and loss_vq
-        loss_recon = self.hparams.compute_cost_recon(predictions)
-        loss_commit = self.hparams.compute_cost_commit(predictions, self.hparams.commit_cost)
+        loss_recon = self.hparams.compute_cost_recon(predict_dict=predictions)
+        loss_commit = self.hparams.compute_cost_commit(predict_dict=predictions)
         loss = loss_recon + loss_commit
 
         if stage == sb.Stage.TEST and self.step <= self.hparams.log_save:
@@ -80,8 +80,8 @@ class NCBrain(sb.Brain):
         self.sisnr_metric.append(batch.id, predictions["est_wav"].squeeze(dim=1), raw_wav.squeeze(dim=1), lens, reduction="batch")
 
         if stage != sb.Stage.TEST:
-            self.loss_recon_metric.append(batch.id, predictions, lens, reduction="batch")
-            self.loss_commit_metric.append(batch.id, predictions, self.hparams.commit_cost, lens, reduction="batch")
+            self.loss_recon_metric.append(batch.id, predict_dict=predictions, lens=lens, reduction="batch")
+            self.loss_commit_metric.append(batch.id, predict_dict=predictions, lens=lens, reduction="batch")
 
         return loss
 

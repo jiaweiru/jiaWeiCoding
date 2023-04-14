@@ -68,7 +68,7 @@ test_dataloader_options:
 
 compute_cost_recon: !name:models.magri_loss
 compute_cost_commit: !name:models.commit_loss
-commit_cost: 0.1
+    cost: 0.1
 
 model: !new:models.ARN
     win_len: !ref <win_length>
