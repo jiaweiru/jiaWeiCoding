@@ -9,7 +9,7 @@ from pathlib import Path
 from pesq import pesq
 from speechbrain.nnet.loss import stoi_loss
 from hyperpyyaml import load_hyperpyyaml
-from utills import prepare_json
+from utills import prepare_libritts
 
 
 plt.switch_backend('agg')
@@ -31,9 +31,27 @@ class NCBrain(sb.Brain):
 
         batch = batch.to(self.device)
         wavs, lens = batch.wav
+        wavs = wavs.unsqueeze(1)
 
-        # model forward
-        output_dict = self.modules.model(wavs)
+        if stage == sb.Stage.TRAIN:
+            # The problem of unequal lengths does not occur when using intercepted segments of a specific length during training.
+            
+            # model forward
+            output_dict = self.modules.model(wavs)
+            
+        else:
+            # Padding
+            samples = wavs.shape[-1]
+            wavs = torch.nn.functional.pad(
+                wavs, (0, hparams["hop_length"] - (samples % hparams["hop_length"])), "constant"
+            )
+        
+            # model forward
+            output_dict = self.modules.model(wavs)
+            
+            # Trimming
+            output_dict["raw_wav"] = output_dict["raw_wav"][:, :, :samples]
+            output_dict["est_wav"] = output_dict["est_wav"][:, :, :samples]
 
         return output_dict
 
@@ -52,6 +70,7 @@ class NCBrain(sb.Brain):
 
         # Prepare clean targets for comparison
         raw_wav, lens = batch.wav
+        raw_wav = raw_wav.unsqueeze(1)
 
         # Total loss consists of loss_rencon and loss_vq
         loss_recon = self.hparams.compute_cost_recon(predict_dict=predictions)
@@ -230,18 +249,23 @@ def dataio_prep(hparams):
         dict: Contains two keys, "train" and "valid" that correspond to the appropriate DynamicItemDataset object.
     """
 
-    # Define audio pipeline.
-    # It is scalable for other requirements in coding tasks, such as enhancement, packet loss.
-    @sb.utils.data_pipeline.takes("path")
-    # Takes the key of the json file.
-    @sb.utils.data_pipeline.provides("wav")
-    # Provides("wav") --> using batch.wav
-    def audio_pipeline(path):
-        wav = sb.dataio.dataio.read_audio(path)
-        wav = wav.unsqueeze(dim=0)
-        # The shape of wav is [B, 1, T]
+    segment_size = hparams["segment_size"]
 
-        # Padded in collate_fn later
+    # Define audio pipeline:
+    @sb.utils.data_pipeline.takes("path", "segment")
+    @sb.utils.data_pipeline.provides("wav")
+    def audio_pipeline(path, segment):
+        wav = sb.dataio.dataio.read_audio(path)
+        if segment:
+            if wav.size(0) >= segment_size:
+                max_audio_start = wav.size(0) - segment_size
+                audio_start = torch.randint(0, max_audio_start, (1,))
+                wav = wav[audio_start : audio_start + segment_size]
+            else:
+                wav = torch.nn.functional.pad(
+                    wav, (0, segment_size - wav.size(0)), "constant"
+                )
+
         return wav
 
     datasets = {}
@@ -282,18 +306,19 @@ if __name__ == "__main__":
     )
 
     # Data preparation, to be run on only one process.
-    sb.utils.distributed.run_on_main(
-        prepare_json,
-        kwargs={
-            'train_folder':hparams["train_folder"],
-            'valid_folder':hparams["valid_folder"],
-            'test_folder':hparams["test_folder"],
-            'save_json_train':hparams["train_annotation"],
-            'save_json_valid':hparams["valid_annotation"],
-            'save_json_test':hparams["test_annotation"],
-            'extension':[".flac"]
-        },
-    )
+    if not hparams["skip_prep"]:
+        sb.utils.distributed.run_on_main(
+            prepare_libritts,
+            kwargs={
+                'data_folder':hparams["data_folder"],
+                'save_json_train':hparams["train_annotation"],
+                'save_json_valid':hparams["valid_annotation"],
+                'save_json_test':hparams["test_annotation"],
+                "sample_rate": hparams["sample_rate"],
+                "split_ratio": hparams["split_ratio"],
+                "libritts_subsets": hparams["libritts_subsets"]
+            },
+        )
         
 
     # Create dataset objects "train" and "valid"

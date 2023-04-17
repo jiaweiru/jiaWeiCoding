@@ -12,13 +12,10 @@ __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 # 4- Set data_folder with the local path.
 # Reading data from the local disk of the compute node (e.g. $SLURM_TMPDIR with SLURM-based clusters) is very important.
 # It allows you to read the data much faster without slowing down the shared filesystem.
-data_folder: /home/ubuntu/Code/BBwe/datasets/LibriSpeech
-train_folder: !ref <data_folder>/train-clean_split
-valid_folder: !ref <data_folder>/dev-clean_split
-test_folder: !ref <data_folder>/test-clean
+data_folder: /home/sturjw/Datasets/LibriTTS
 json_folder: ./json
 
-output_folder: !ref ./results/speech/<seed>/TFNet
+output_folder: !ref ./results/speech/<seed>/ARN_mel
 save_folder: !ref <output_folder>/save
 samples_folder: !ref <output_folder>/test_samples
 
@@ -30,6 +27,10 @@ tensorboard_logs: !ref <output_folder>/tb_logs
 train_annotation: !ref <json_folder>/speech_train.json
 valid_annotation: !ref <json_folder>/speech_valid.json
 test_annotation: !ref <json_folder>/speech_test.json
+libritts_subsets: ["train-clean-100", "train-clean-360"]
+split_ratio: [80, 10, 10]
+skip_prep: False
+segment_size: 48000
 
 # The train logger writes training statistics to a file, as well as stdout.
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
@@ -39,19 +40,20 @@ tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
     save_dir: !ref <tensorboard_logs>
 
 # Training Parameters
-number_of_epochs: 140
-batch_size: 100
-learning_rate: 0.0002
+number_of_epochs: 100
+batch_size: 128
+learning_rate: 0.0003
 max_grad_norm: 5.0
 
 # Test stage:
 # Visualize and save the first few audios
 sample_rate: 16000
 log_save: 5
-n_jobs: 1 # Number of jobs to compute metrics (increase it for a speed up)
+pesq_n_jobs: 24 # Number of jobs to compute metrics (increase it for a speed up)
 win_length: 320
-hop_length: 80
+hop_length: 160
 n_fft: 320
+win_type: hann
 
 train_dataloader_options:
     batch_size: !ref <batch_size>
@@ -65,11 +67,39 @@ test_dataloader_options:
     batch_size: 1
     shuffle: False
 
-compute_cost_recon: !name:models.ri_loss
+compute_cost_recon: !name:models.magri_multimel_loss
+    mel_dict:
+        sample_rate: 16000
+        n_mels: 64
+        f_min: 0
+        f_max: 8000
+        power: 1
+        norm: "slaney"
+        mel_scale: "slaney"
+        normalized: False
+    level: (5, 10)
+    cost_magri: 1.0
+    cost_multimel: 1.0
 compute_cost_commit: !name:models.commit_loss
-    cost: 0.1
+commit_cost: 0.1
 
-model: !new:models.TFNet
+model: !new:models.ARN
+    win_len: !ref <win_length>
+    win_inc: !ref <hop_length>
+    fft_len: !ref <n_fft>
+    win_type: !ref <win_type>
+    kernel_size: !tuple (5, 5, 5, 5)
+    kernel_stride: !tuple (1, 4, 4, 2)
+    kernel_num: !tuple (16, 32, 64, 120)
+    rnn_layers: 2
+    rnn_units: 64
+    rnn_type: LSTM
+    attn_layers: 2
+    n_heads: 8
+    groups: 6
+    bit_per_cbk: 10
+    comp_law: power-law
+    alpha: 0.5
 
 # The first object passed to the Brain class is this "Epoch Counter"
 # which is saved by the Checkpointer so that training can be resumed

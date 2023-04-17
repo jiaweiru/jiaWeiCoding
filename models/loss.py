@@ -25,7 +25,7 @@ def magri_loss(predict_dict, lens=None, reduction="mean"):
     loss_mag = mse_loss(predict_mag, target_mag, length=lens, reduction=reduction)
     loss_ri = mse_loss(predict_spec[:, :, :bins], target_spec[:, :, :bins], length=lens, reduction=reduction) \
             + mse_loss(predict_spec[:, :, bins:], target_spec[:, :, bins:], length=lens, reduction=reduction)
-
+    
     return loss_mag + loss_ri
 
 def ri_loss(predict_dict, lens=None, reduction="mean"):

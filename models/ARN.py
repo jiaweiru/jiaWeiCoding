@@ -342,7 +342,7 @@ def power_law(x, alpha=0.5):
     real = x[:, 0, :, :]
     imag = x[:, 1, :, :]
     mag = torch.sqrt(real ** 2 + imag ** 2 + EPSILON)
-    phase = torch.atan2(imag, real)
+    phase = torch.atan2(imag + EPSILON, real)
     mag_comp = torch.pow(mag, alpha)
     real = mag_comp * torch.cos(phase)
     imag = mag_comp * torch.sin(phase)
@@ -359,7 +359,7 @@ def log_law(x, inverse=False):
     real = x[:, 0, :, :]
     imag = x[:, 1, :, :]
     mag = torch.sqrt(real ** 2 + imag ** 2 + EPSILON)
-    phase = torch.atan2(imag, real)
+    phase = torch.atan2(imag + EPSILON, real)
     if not inverse:
         mag_comp = torch.log1p(mag)
     else:

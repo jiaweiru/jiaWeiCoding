@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 from speechbrain.nnet.loss import si_snr_loss
 from hyperpyyaml import load_hyperpyyaml
-from utills import prepare_json
+from utills import prepare_musdb18
 from pathlib import Path
 
 plt.switch_backend('agg')
@@ -29,9 +29,30 @@ class NCBrain(sb.Brain):
 
         batch = batch.to(self.device)
         wavs, lens = batch.wav
-
-        # model forward
-        output_dict = self.modules.model(wavs)
+        
+        # Mono and stereo compatible
+        if len(wavs.shape) == 2:
+            wavs = wavs.unsqueeze(1)
+        
+        if stage == sb.Stage.TRAIN:
+            # The problem of unequal lengths does not occur when using intercepted segments of a specific length during training.
+            
+            # model forward
+            output_dict = self.modules.model(wavs)
+            
+        else:
+            # Padding
+            samples = wavs.shape[-1]
+            wavs = torch.nn.functional.pad(
+                wavs, (0, hparams["hop_length"] - (samples % hparams["hop_length"])), "constant"
+            )
+        
+            # model forward
+            output_dict = self.modules.model(wavs)
+            
+            # Trimming
+            output_dict["raw_wav"] = output_dict["raw_wav"][:, :, :samples]
+            output_dict["est_wav"] = output_dict["est_wav"][:, :, :samples]
 
         return output_dict
 
@@ -50,6 +71,8 @@ class NCBrain(sb.Brain):
 
         # Prepare clean targets for comparison
         raw_wav, lens = batch.wav
+        if len(raw_wav.shape) == 2:
+            raw_wav = raw_wav.unsqueeze(1)
 
         # Total loss consists of loss_rencon and loss_vq
         loss_recon = self.hparams.compute_cost_recon(predict_dict=predictions)
@@ -205,16 +228,45 @@ def dataio_prep(hparams):
 
     # Define audio pipeline.
     # It is scalable for other requirements in coding tasks, such as enhancement, packet loss.
-    @sb.utils.data_pipeline.takes("path")
+    @sb.utils.data_pipeline.takes("path", "length", "evaluate")
     # Takes the key of the json file.
     @sb.utils.data_pipeline.provides("wav")
-    # Provides("wav") --> using batch.wav
-    def audio_pipeline(path):
-        wav = sb.dataio.dataio.read_audio(path)
-        wav = wav.unsqueeze(dim=0)
-        # The shape of wav is [B, 1, T]
-
+    # Provides("wav") -> using batch.wav
+    def audio_pipeline(path, length, evaluate):
+        """
+        On the train stage, the audio is cropped and cut to a single channel in a given way.
+        On the valid or test stage, the whole segment of the mixture audio is used, which is converted to a single channel using avg-to-mono.
+        """
+        mono_type = hparams["mono_type"]
+        if not evaluate:
+            # Second -> samples, 1s = 44100samples
+            segment = hparams["segment"] * hparams["sample_rate"]
+            length = int(length * hparams["sample_rate"])
+            
+            max_audio_start = length - segment
+            audio_start = torch.randint(0, max_audio_start, (1,))
+            audio_stop = audio_start + segment
+            
+            # Get wav with the shape [samples, channels]
+            wav = sb.dataio.dataio.read_audio({
+                "file": path,
+                "start": audio_start,
+                "stop": audio_stop
+            })
+            
+            if mono_type == 'avg':
+                wav = torch.mean(wav, 1)
+            elif mono_type == 'split':
+                channel = torch.randint(0, 2, (1,))
+                wav = wav[:, channel]
+                
+        else:
+            wav = sb.dataio.dataio.read_audio(path)
+            if mono_type:
+                wav = torch.mean(wav, 1)
+        
         # Padded in collate_fn later
+        # The shape of wav after padded is [B, samples, channels]
         return wav
 
     datasets = {}
@@ -256,14 +308,14 @@ if __name__ == "__main__":
 
     # Data preparation, to be run on only one process.
     sb.utils.distributed.run_on_main(
-        prepare_json,
+        prepare_musdb18,
         kwargs={
-            'train_folder':hparams["train_folder"],
-            'valid_folder':hparams["valid_folder"],
-            'test_folder':hparams["test_folder"],
+            'data_folder':hparams["data_folder"],
             'save_json_train':hparams["train_annotation"],
             'save_json_valid':hparams["valid_annotation"],
-            'save_json_test':hparams["test_annotation"]
+            'save_json_test':hparams["test_annotation"],
+            'split_ratio':hparams["split_ratio"],
+            'audio_type':hparams["audio_type"]
         },
     )
         

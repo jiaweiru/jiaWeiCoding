@@ -12,10 +12,7 @@ __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 # 4- Set data_folder with the local path.
 # Reading data from the local disk of the compute node (e.g. $SLURM_TMPDIR with SLURM-based clusters) is very important.
 # It allows you to read the data much faster without slowing down the shared filesystem.
-data_folder: /home/ubuntu/Code/CCodec/musdb18hq
-train_folder: !ref <data_folder>/train_mixture_3s_ChannelSplitting
-valid_folder: !ref <data_folder>/test_mixture_3s_ChannelSplitting
-test_folder: !ref <data_folder>/test_mixture_8s_ChannelSplitting
+data_folder: /home/sturjw/Datasets/MUSDB18-HQ
 json_folder: ./json
 
 output_folder: !ref ./results/audio/<seed>/ARN_853K_baseline
@@ -30,6 +27,10 @@ tensorboard_logs: !ref <output_folder>/tb_logs
 train_annotation: !ref <json_folder>/audio_train.json
 valid_annotation: !ref <json_folder>/audio_valid.json
 test_annotation: !ref <json_folder>/audio_test.json
+split_ratio: [80, 10, 10]
+audio_type: mixture
+segment: 3
+mono_type: avg
 
 # The train logger writes training statistics to a file, as well as stdout.
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
@@ -61,7 +62,7 @@ train_dataloader_options:
     shuffle: True
 
 valid_dataloader_options:
-    batch_size: !ref <batch_size>
+    batch_size: 1
     shuffle: False
 
 test_dataloader_options:
