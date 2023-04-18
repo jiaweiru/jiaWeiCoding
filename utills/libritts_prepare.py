@@ -19,7 +19,8 @@ def prepare_libritts(
     sample_rate,
     train_subsets=["train-clean-100", "train-clean-360"],
     valid_subsets=["dev-clean"],
-    test_subsets=["test-clean"]
+    test_subsets=["test-clean"],
+    min_duration=0.4
 ):
     """
     Prepares the json files for the LibriTTS dataset.
@@ -47,6 +48,8 @@ def prepare_libritts(
         List of valid subsets to use.
     test_subsets: list
         List of test subsets to use.
+    min_duration: float
+        Discard voice segments whose duration is less than min_duration to avoid problems in calculating stoi.
     Example
     -------
     >>> data_folder = '/path/to/LibriTTS'
@@ -98,12 +101,12 @@ def prepare_libritts(
     )
 
     # Creating json files
-    create_json(train_list, save_json_train, sample_rate)
-    create_json(valid_list, save_json_valid, sample_rate)
-    create_json(test_list, save_json_test, sample_rate)
+    create_json(train_list, save_json_train, sample_rate, min_duration)
+    create_json(valid_list, save_json_valid, sample_rate, min_duration)
+    create_json(test_list, save_json_test, sample_rate, min_duration)
 
 
-def create_json(wav_list, json_file, sample_rate):
+def create_json(wav_list, json_file, sample_rate, min_duration):
     """
     Creates the json file given a list of wav files.
     Arguments
@@ -117,6 +120,7 @@ def create_json(wav_list, json_file, sample_rate):
     """
 
     json_dict = {}
+    drop = 0
     # Creates a resampler object with orig_freq set to LibriTTS sample rate (24KHz) and  new_freq set to SAMPLERATE
     resampler = Resample(orig_freq=24000, new_freq=sample_rate)
 
@@ -126,6 +130,8 @@ def create_json(wav_list, json_file, sample_rate):
         # Reads the signal
         signal, sig_sr = torchaudio.load(wav_file)
         signal = signal.squeeze(0)
+
+        duration = signal.shape[0] / sig_sr
 
         # Manipulates path to get relative path and uttid
         path_parts = wav_file.split(os.path.sep)
@@ -143,11 +149,14 @@ def create_json(wav_list, json_file, sample_rate):
         spk_id = uttid.split("_")[0]
 
         # Creates an entry for the utterance
-        json_dict[uttid] = {
-            "path": relative_path,
-            "spk_id": spk_id,
-            "segment": True if "train" in json_file else False,
-        }
+        if duration > min_duration:
+            json_dict[uttid] = {
+                "path": relative_path,
+                "spk_id": spk_id,
+                "length": duration,
+                "segment": True if "train" in json_file else False,
+            }
+        else: drop += 1
 
     # Writes the dictionary to the json file
     json_dir = os.path.dirname(json_file)
@@ -157,7 +166,7 @@ def create_json(wav_list, json_file, sample_rate):
     with open(json_file, mode="w") as json_f:
         json.dump(json_dict, json_f, indent=2)
 
-    logger.info(f"{json_file} successfully created!")
+    logger.info(f"{json_file} successfully created! Drop {drop} voice segments shorter than {min_duration}s.")
 
 
 def skip(*filenames):
