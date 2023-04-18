@@ -317,7 +317,8 @@ if __name__ == "__main__":
                 "sample_rate": hparams["sample_rate"],
                 "train_subsets": hparams["train_subsets"],
                 "valid_subsets": hparams["valid_subsets"],
-                "test_subsets": hparams["test_subsets"]
+                "test_subsets": hparams["test_subsets"],
+                "min_duration": hparams["min_duration"]
             },
         )
         

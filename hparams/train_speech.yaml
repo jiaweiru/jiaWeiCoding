@@ -32,6 +32,7 @@ valid_subsets: ["dev-clean"]
 test_subsets: ["test-clean"]
 skip_prep: False
 segment_size: 3
+min_duration: 0.5
 
 # The train logger writes training statistics to a file, as well as stdout.
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
