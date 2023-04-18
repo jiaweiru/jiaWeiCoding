@@ -49,7 +49,7 @@ window_fn: !name:torch.hann_window
 
 # Training Parameters
 number_of_epochs: 400
-batch_size: 16
+batch_size: 32
 learning_rate: 0.001
 max_grad_norm: 5.0
 
