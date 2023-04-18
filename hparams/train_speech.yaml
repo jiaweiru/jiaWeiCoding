@@ -1,5 +1,5 @@
 # Seed needs to be set at top of yaml, before objects with parameters are made
-seed: 4234
+seed: 2234
 __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 
 # Set up folders for reading from and writing to
@@ -27,10 +27,11 @@ tensorboard_logs: !ref <output_folder>/tb_logs
 train_annotation: !ref <json_folder>/speech_train.json
 valid_annotation: !ref <json_folder>/speech_valid.json
 test_annotation: !ref <json_folder>/speech_test.json
-libritts_subsets: ["train-clean-100", "train-clean-360"]
-split_ratio: [80, 10, 10]
+train_subsets: ["train-clean-100", "train-clean-360"]
+valid_subsets: ["dev-clean"]
+test_subsets: ["test-clean"]
 skip_prep: False
-segment_size: 48000
+segment_size: 3
 
 # The train logger writes training statistics to a file, as well as stdout.
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
@@ -41,7 +42,7 @@ tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
 
 # Training Parameters
 number_of_epochs: 100
-batch_size: 128
+batch_size: 64
 learning_rate: 0.0003
 max_grad_norm: 5.0
 
@@ -60,7 +61,7 @@ train_dataloader_options:
     shuffle: True
 
 valid_dataloader_options:
-    batch_size: !ref <batch_size>
+    batch_size: 1
     shuffle: False
 
 test_dataloader_options:
@@ -81,7 +82,7 @@ compute_cost_recon: !name:models.magri_multimel_loss
     cost_magri: 1.0
     cost_multimel: 1.0
 compute_cost_commit: !name:models.commit_loss
-commit_cost: 0.1
+    cost: 0.1
 
 model: !new:models.ARN
     win_len: !ref <win_length>

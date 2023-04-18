@@ -17,8 +17,9 @@ def prepare_libritts(
     save_json_valid,
     save_json_test,
     sample_rate,
-    split_ratio=[80, 10, 10],
-    libritts_subsets=["train-clean-100"],
+    train_subsets=["train-clean-100", "train-clean-360"],
+    valid_subsets=["dev-clean"],
+    test_subsets=["test-clean"]
 ):
     """
     Prepares the json files for the LibriTTS dataset.
@@ -40,8 +41,12 @@ def prepare_libritts(
         for test.
     sample_rate : int
         The sample rate to be used for the dataset
-    libritts_subsets: list
-        List of librispeech subsets to use (e.g., dev-clean, train-clean-100, ...).
+    train_subsets: list
+        List of train subsets to use (e.g., train-clean-100, train-clean-360, ...).
+    valid_subsets: list
+        List of valid subsets to use.
+    test_subsets: list
+        List of test subsets to use.
     Example
     -------
     >>> data_folder = '/path/to/LibriTTS'
@@ -54,46 +59,48 @@ def prepare_libritts(
         return
 
     extension = [".wav"]  # The expected extension for audio files
-    wav_list = list()  # Stores all audio file paths for the dataset
+    train_list = []  # Stores all audio file paths for the dataset
+    valid_list = []
+    test_list = []
 
     # For every subset of the dataset, if it doesn't exist, downloads it and sets flag to resample the subset
-    for subset_name in libritts_subsets:
+    for list, subset in zip([train_list, valid_list, test_list], [train_subsets, valid_subsets, test_subsets]):
+        
+        for subset_name in subset:
 
-        subset_folder = os.path.join(data_folder, subset_name)
-        subset_archive = os.path.join(subset_folder, subset_name + ".tar.gz")
+            subset_folder = os.path.join(data_folder, subset_name)
+            subset_archive = os.path.join(subset_folder, subset_name + ".tar.gz")
 
-        subset_data = os.path.join(subset_folder, "LibriTTS")
-        if not check_folders(subset_data):
-            logger.info(
-                f"No data found for {subset_name}. Checking for an archive file."
-            )
-            if not os.path.isfile(subset_archive):
+            subset_data = os.path.join(subset_folder, "LibriTTS")
+            if not check_folders(subset_data):
                 logger.info(
-                    f"No archive file found for {subset_name}. Downloading and unpacking."
+                    f"No data found for {subset_name}. Checking for an archive file."
                 )
-                subset_url = LIBRITTS_URL_PREFIX + subset_name + ".tar.gz"
-                download_file(subset_url, subset_archive)
-                logger.info(f"Downloaded data for subset {subset_name}.")
-            else:
-                logger.info(
-                    f"Found an archive file for {subset_name}. Unpacking."
-                )
+                if not os.path.isfile(subset_archive):
+                    logger.info(
+                        f"No archive file found for {subset_name}. Downloading and unpacking."
+                    )
+                    subset_url = LIBRITTS_URL_PREFIX + subset_name + ".tar.gz"
+                    download_file(subset_url, subset_archive)
+                    logger.info(f"Downloaded data for subset {subset_name}.")
+                else:
+                    logger.info(
+                        f"Found an archive file for {subset_name}. Unpacking."
+                    )
 
-            shutil.unpack_archive(subset_archive, subset_folder)
+                shutil.unpack_archive(subset_archive, subset_folder)
 
-        # Collects all files matching the provided extension
-        wav_list.extend(get_all_files(subset_folder, match_and=extension))
+            # Collects all files matching the provided extension
+            list.extend(get_all_files(subset_folder, match_and=extension))
 
     logger.info(
         f"Creating {save_json_train}, {save_json_valid}, and {save_json_test}"
     )
 
-    # Random split the signal list into train, valid, and test sets.
-    data_split = split_sets(wav_list, split_ratio)
     # Creating json files
-    create_json(data_split["train"], save_json_train, sample_rate)
-    create_json(data_split["valid"], save_json_valid, sample_rate)
-    create_json(data_split["test"], save_json_test, sample_rate)
+    create_json(train_list, save_json_train, sample_rate)
+    create_json(valid_list, save_json_valid, sample_rate)
+    create_json(test_list, save_json_test, sample_rate)
 
 
 def create_json(wav_list, json_file, sample_rate):
@@ -125,17 +132,6 @@ def create_json(wav_list, json_file, sample_rate):
         uttid, _ = os.path.splitext(path_parts[-1])
         relative_path = os.path.join("{data_root}", *path_parts[-6:])
 
-        # Gets the path for the  text files and extracts the input text
-        original_text_path = os.path.join(
-            "/", *path_parts[:-1], uttid + ".original.txt"
-        )
-        with open(original_text_path) as f:
-            original_text = f.read()
-            if original_text.__contains__("{"):
-                original_text = original_text.replace("{", "")
-            if original_text.__contains__("}"):
-                original_text = original_text.replace("}", "")
-
         # Resamples the audio file if required
         if sig_sr != sample_rate:
             signal = signal.unsqueeze(0)
@@ -150,7 +146,6 @@ def create_json(wav_list, json_file, sample_rate):
         json_dict[uttid] = {
             "path": relative_path,
             "spk_id": spk_id,
-            "label": original_text,
             "segment": True if "train" in json_file else False,
         }
 

@@ -216,7 +216,7 @@ class NCBrain(sb.Brain):
 
             # Save the current checkpoint and delete previous checkpoints,
             # unless they have the current best pesq score.
-            self.checkpointer.save_and_keep_only(meta=valid_stats, max_keys=["pesq"])
+            self.checkpointer.save_and_keep_only(meta=valid_stats, max_keys=["stoi"])
 
         # We also write statistics about test data to stdout and to the logfile.
         if stage == sb.Stage.TEST:
@@ -249,7 +249,6 @@ def dataio_prep(hparams):
         dict: Contains two keys, "train" and "valid" that correspond to the appropriate DynamicItemDataset object.
     """
 
-    segment_size = hparams["segment_size"]
 
     # Define audio pipeline:
     @sb.utils.data_pipeline.takes("path", "segment")
@@ -257,7 +256,8 @@ def dataio_prep(hparams):
     def audio_pipeline(path, segment):
         wav = sb.dataio.dataio.read_audio(path)
         if segment:
-            if wav.size(0) >= segment_size:
+            segment_size = hparams["segment_size"] * hparams["sample_rate"]
+            if wav.size(0) > segment_size:
                 max_audio_start = wav.size(0) - segment_size
                 audio_start = torch.randint(0, max_audio_start, (1,))
                 wav = wav[audio_start : audio_start + segment_size]
@@ -315,8 +315,9 @@ if __name__ == "__main__":
                 'save_json_valid':hparams["valid_annotation"],
                 'save_json_test':hparams["test_annotation"],
                 "sample_rate": hparams["sample_rate"],
-                "split_ratio": hparams["split_ratio"],
-                "libritts_subsets": hparams["libritts_subsets"]
+                "train_subsets": hparams["train_subsets"],
+                "valid_subsets": hparams["valid_subsets"],
+                "test_subsets": hparams["test_subsets"]
             },
         )
         

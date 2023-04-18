@@ -20,7 +20,7 @@ def magri_loss(predict_dict, lens=None, reduction="mean"):
     # Use speechbrain style to accommodate variable length training.
 
     # the number of freq bins 
-    bins = predict_mag.shape[1]
+    bins = predict_mag.shape[2]
 
     loss_mag = mse_loss(predict_mag, target_mag, length=lens, reduction=reduction)
     loss_ri = mse_loss(predict_spec[:, :, :bins], target_spec[:, :, :bins], length=lens, reduction=reduction) \
@@ -77,7 +77,7 @@ def tf_loss(predict_dict, lens=None, cost_f=1, cost_t=10, reduction="mean"):
     # Use speechbrain style to accommodate variable length training.
 
     # the number of freq bins 
-    bins = predict_mag.shape[1]
+    bins = predict_mag.shape[2]
 
     loss_mag = mse_loss(predict_mag, target_mag, length=lens, reduction=reduction)
     loss_ri = mse_loss(predict_spec[:, :, :bins], target_spec[:, :, :bins], length=lens, reduction=reduction) \
@@ -102,7 +102,7 @@ def magri_feature_loss(predict_dict, cost_f=1, cost_m=0.1, lens=None, reduction=
     # Use speechbrain style to accommodate variable length training.
 
     # the number of freq bins 
-    bins = predict_mag.shape[1]
+    bins = predict_mag.shape[2]
 
     loss_mag = mse_loss(predict_mag, target_mag, length=lens, reduction=reduction)
     loss_ri = mse_loss(predict_spec[:, :, :bins], target_spec[:, :, :bins], length=lens, reduction=reduction) \
