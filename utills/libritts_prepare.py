@@ -101,9 +101,9 @@ def prepare_libritts(
     )
 
     # Creating json files
-    create_json(train_list, save_json_train, sample_rate, min_duration)
-    create_json(valid_list, save_json_valid, sample_rate, min_duration)
-    create_json(test_list, save_json_test, sample_rate, min_duration)
+    create_json(train_list, save_json_train, sample_rate, min_duration["train"])
+    create_json(valid_list, save_json_valid, sample_rate, min_duration["valid"])
+    create_json(test_list, save_json_test, sample_rate, min_duration["test"])
 
 
 def create_json(wav_list, json_file, sample_rate, min_duration):
