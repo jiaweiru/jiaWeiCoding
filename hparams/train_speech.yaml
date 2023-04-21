@@ -46,7 +46,7 @@ tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
 
 # Training Parameters
 number_of_epochs: 400
-batch_size: 128
+batch_size: 64
 learning_rate: 0.0003
 max_grad_norm: 5.0
 
