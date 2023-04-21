@@ -12,7 +12,7 @@ plt.switch_backend('agg')
 SAMPLE_RATE = 44100
 
 @st.cache_resource
-def load_coder(source='/home/ubuntu/Code/DCodec/hparams',
+def load_coder(source='/home/sturjw/Code/jiaWeiCoding/hparams',
                hparams='compress.yaml',
                pretrained_dir='./pretrained_streamlit'):
     
