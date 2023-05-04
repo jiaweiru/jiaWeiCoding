@@ -140,7 +140,7 @@ def commit_loss_magphase(predict_dict, cost, lens=None, reduction="mean"):
             + mse_loss(phases_feature, phases_feature_q, length=lens, reduction=reduction) * cost / 2.
 
 
-def mel_loss(mel_dict, compression, predict_dict, lens=None, reduction="mean"):
+def mel_loss(mel_dict, compression, predict_dict, type, lens=None, reduction="mean"):
     """
     Calculation of mel spectrum loss.
 
@@ -164,11 +164,13 @@ def mel_loss(mel_dict, compression, predict_dict, lens=None, reduction="mean"):
         # eps = 1e-5, C = 1, similar to HifiGAN
         raw_mel = torch.log(torch.clamp(raw_mel, min=1e-5) * 1)
         predict_mel = torch.log(torch.clamp(predict_mel, min=1e-5) * 1)
-    
-    return mse_loss(predict_mel, raw_mel, length=lens, reduction=reduction)
+    if type == 'l2':
+        return mse_loss(predict_mel, raw_mel, length=lens, reduction=reduction)
+    elif type == 'l1':
+        return l1_loss(predict_mel, raw_mel, length=lens, reduction=reduction)
     
 
-def multimel_loss(mel_dict, level, predict_dict, lens=None, reduction="mean"):
+def multimel_loss(mel_dict, level, predict_dict, loss_tp, lens=None, reduction="mean"):
     """
     Calculation of multi resolution mel spectrum loss.
     
@@ -183,18 +185,18 @@ def multimel_loss(mel_dict, level, predict_dict, lens=None, reduction="mean"):
         mel_dict["hop_length"] = 2 ** i // 4
         mel_dict["win_length"] = 2 ** i
         mel_dict["n_fft"] = 2 ** i
-        loss += mel_loss(mel_dict, True, predict_dict, lens, reduction)
+        loss += mel_loss(mel_dict, True, predict_dict, loss_tp, lens, reduction)
         
     total_loss = loss / (level[1] + 1 - level[0])
     
     return total_loss
 
 
-def magri_multimel_loss(mel_dict, level, predict_dict, cost_magri, cost_multimel, lens=None, reduction="mean"):
+def magri_multimel_loss(mel_dict, level, predict_dict, cost_magri, cost_multimel, mel_tp='l2', lens=None, reduction="mean"):
     """
     MagRI + MultiMel Loss
     """
     loss_magri = magri_loss(predict_dict, lens, reduction)
-    loss_multimel = multimel_loss(mel_dict, level, predict_dict, lens, reduction)
+    loss_multimel = multimel_loss(mel_dict, level, predict_dict, mel_tp, lens, reduction)
     
     return loss_magri * cost_magri + loss_multimel * cost_multimel
