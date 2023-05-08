@@ -15,7 +15,7 @@ __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 data_folder: /home/sturjw/Datasets/LibriTTS
 json_folder: ./json
 
-output_folder: !ref ./results/speech/<seed>/ARN_mel_l1
+output_folder: !ref ./results/speech/<seed>/ARN_mel_l1_sche
 save_folder: !ref <output_folder>/save
 samples_folder: !ref <output_folder>/test_samples
 
@@ -123,11 +123,11 @@ modules:
 opt_class: !name:torch.optim.Adam
     lr: !ref <learning_rate>
 
-sched: False
+sched: True
 lr_scheduler: !new:speechbrain.nnet.schedulers.ReduceLROnPlateau
-    factor: 0.9
+    factor: 0.8
     patience: 3
-    dont_halve_until_epoch: 0
+    dont_halve_until_epoch: 50
 
 # This object is used for saving the state of training both so that it
 # can be resumed if it gets interrupted, and also so that the best checkpoint
