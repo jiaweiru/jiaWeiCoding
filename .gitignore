@@ -1,0 +1,11 @@
+json/
+results/
+pretrained_results/
+pretrained_streamlit/
+/cccc.py
+
+# Ongoing about fine tuning speech coding model with GAN
+/train_speech_finetune_gan.py
+/hparams/train_speech_finetune_gan.yaml
+
+**/__pycache__/
