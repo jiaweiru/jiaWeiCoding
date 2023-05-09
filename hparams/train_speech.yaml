@@ -72,7 +72,7 @@ test_dataloader_options:
     batch_size: 1
     shuffle: False
 
-compute_cost_recon: !name:models.magri_multimel_loss
+compute_cost_recon: !name:models.ri_multimel_loss
     mel_dict:
         sample_rate: 16000
         n_mels: 64
