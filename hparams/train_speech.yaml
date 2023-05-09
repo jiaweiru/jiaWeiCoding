@@ -83,7 +83,7 @@ compute_cost_recon: !name:models.ri_multimel_loss
         mel_scale: "slaney"
         normalized: False
     level: (6, 11)
-    cost_magri: 1.0
+    cost_ri: 1.0
     cost_multimel: 1.0
     mel_tp: l1
 compute_cost_commit: !name:models.commit_loss
