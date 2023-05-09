@@ -200,3 +200,13 @@ def magri_multimel_loss(mel_dict, level, predict_dict, cost_magri, cost_multimel
     loss_multimel = multimel_loss(mel_dict, level, predict_dict, mel_tp, lens, reduction)
     
     return loss_magri * cost_magri + loss_multimel * cost_multimel
+
+
+def ri_multimel_loss(mel_dict, level, predict_dict, cost_magri, cost_multimel, mel_tp='l2', lens=None, reduction="mean"):
+    """
+    MagRI + MultiMel Loss
+    """
+    loss_ri = ri_loss(predict_dict, lens, reduction)
+    loss_multimel = multimel_loss(mel_dict, level, predict_dict, mel_tp, lens, reduction)
+    
+    return loss_ri * cost_magri + loss_multimel * cost_multimel

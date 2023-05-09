@@ -15,7 +15,7 @@ __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 data_folder: /home/sturjw/Datasets/LibriTTS
 json_folder: ./json
 
-output_folder: !ref ./results/speech/<seed>/ARN_mel_l1_sche
+output_folder: !ref ./results/speech/<seed>/ARN_mel_l1_RI
 save_folder: !ref <output_folder>/save
 samples_folder: !ref <output_folder>/test_samples
 
@@ -123,7 +123,7 @@ modules:
 opt_class: !name:torch.optim.Adam
     lr: !ref <learning_rate>
 
-sched: True
+sched: False
 lr_scheduler: !new:speechbrain.nnet.schedulers.ReduceLROnPlateau
     factor: 0.8
     patience: 3
