@@ -43,7 +43,7 @@ class NCBrain(sb.Brain):
             # Padding
             samples = wavs.shape[-1]
             wavs = torch.nn.functional.pad(
-                wavs, (0, hparams["hop_length"] - (samples % hparams["hop_length"])), "constant"
+                wavs, (0, self.hparams["hop_length"] - (samples % self.hparams["hop_length"])), "constant"
             )
         
             # model forward
