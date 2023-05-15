@@ -4,8 +4,5 @@ pretrained_results/
 pretrained_streamlit/
 /cccc.py
 
-# Ongoing about fine tuning speech coding model with GAN
-/train_speech_gan.py
-/hparams/train_speech_gan.yaml
 
 **/__pycache__/

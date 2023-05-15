@@ -119,27 +119,6 @@ def magri_feature_loss(predict_dict, cost_f=1, cost_m=0.1, lens=None, reduction=
     return cost_f * (loss_mag + loss_ri) + cost_m * loss_match
 
 
-def commit_loss_magphase(predict_dict, cost, lens=None, reduction="mean"):
-    """
-    Compute commitment loss for mag phase decoupled model between the input and the quantized feature.
-    Note that the quantized feature has no gradient attribute due to detach().
-
-    Args:
-        predict_dict (dict): A dictionary of predictions, including mags, specs, ... ,wavs.
-        reduction (str, optional): Reduction in speechbrain.nnet.losses.mse_loss. Defaults to "mean".
-    """
-
-    mags_feature, mags_feature_q = predict_dict["mags_feature"], predict_dict["mags_quantized_feature"]
-    mags_feature, mags_feature_q = mags_feature.permute(0, 3, 1, 2).contiguous(), mags_feature_q.permute(0, 3, 1, 2).contiguous()
-    phases_feature, phases_feature_q = predict_dict["phases_feature"], predict_dict["phases_quantized_feature"]
-    phases_feature, phases_feature_q = phases_feature.permute(0, 3, 1, 2).contiguous(), phases_feature_q.permute(0, 3, 1, 2).contiguous()
-    # [B, C, F, T] -> [B, T, C, F]
-    # Use speechbrain style to accommodate variable length training.
-
-    return mse_loss(mags_feature, mags_feature_q, length=lens, reduction=reduction) * cost / 2. \
-            + mse_loss(phases_feature, phases_feature_q, length=lens, reduction=reduction) * cost / 2.
-
-
 def mel_loss(mel_dict, compression, predict_dict, type, lens=None, reduction="mean"):
     """
     Calculation of mel spectrum loss.
@@ -210,3 +189,37 @@ def ri_multimel_loss(mel_dict, level, predict_dict, cost_ri, cost_multimel, mel_
     loss_multimel = multimel_loss(mel_dict, level, predict_dict, mel_tp, lens, reduction)
     
     return loss_ri * cost_ri + loss_multimel * cost_multimel
+
+
+def generator_loss(predict_dict, lens=None, reduction="mean"):
+    # Generator loss: loss_recon, loss_commitment, loss_adv, loss_fm(feature match)
+    mel_dict = {
+        "sample_rate": 16000,
+        "n_mels": 64,
+        "f_min": 0,
+        "f_max": 8000,
+        "power": 1,
+        "norm": "slaney",
+        "mel_scale": "slaney",
+        "normalized": False
+    }
+    loss_recon = magri_multimel_loss(mel_dict=mel_dict, level=(6, 11),
+                                     predict_dict=predict_dict, cost_magri=1.0, cost_multimel=1.0, mel_tp='l1', 
+                                     lens=lens, reduction=reduction)
+    loss_commit = commit_loss(predict_dict=predict_dict, cost=0.1, lens=lens, reduction=reduction)
+    loss_adv = torch.mean((predict_dict["fake_logits"] - 1.) ** 2)
+    
+    loss_fm = 0.
+    for real_f, fake_f in zip(predict_dict["real_fm"], predict_dict["fake_fm"]):
+        loss_fm += F.l1_loss(real_f, fake_f)
+    loss_fm = loss_fm / len(predict_dict["real_fm"])
+    
+    loss_g = loss_recon + loss_commit + loss_adv + loss_fm
+    
+    return {"loss_g": loss_g, "loss_recon": loss_recon, "loss_commit": loss_commit}
+
+
+def discriminator_loss(predict_dict, lens=None, reduction="mean"):
+    loss_d = (torch.mean((predict_dict["real_logits"] - 1.) ** 2) + torch.mean((predict_dict["fake_logits"]) ** 2))
+    
+    return {"loss_d": loss_d}

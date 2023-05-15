@@ -1,18 +1,20 @@
 import sys
 import torch
-import librosa
 import torchaudio
+import librosa
 import speechbrain as sb
 import matplotlib.pyplot as plt
 
-from speechbrain.nnet.loss import si_snr_loss
-from hyperpyyaml import load_hyperpyyaml
-from utills import prepare_musdb18
 from pathlib import Path
+from pesq import pesq
+from speechbrain.nnet.loss import stoi_loss
+from hyperpyyaml import load_hyperpyyaml
+from utills import prepare_libritts
+
 
 plt.switch_backend('agg')
 
-# Brain class for neural audio coding training
+# Brain class for neural speech coding training
 class NCBrain(sb.Brain):
 
     def compute_forward(self, batch, stage):
@@ -29,16 +31,13 @@ class NCBrain(sb.Brain):
 
         batch = batch.to(self.device)
         wavs, lens = batch.wav
-        
-        # Mono and stereo compatible
-        if len(wavs.shape) == 2:
-            wavs = wavs.unsqueeze(1)
-        
+        wavs = wavs.unsqueeze(1)
+
         if stage == sb.Stage.TRAIN:
             # The problem of unequal lengths does not occur when using intercepted segments of a specific length during training.
             
             # model forward
-            output_dict = self.modules.model(wavs)
+            output_dict = self.modules.generator(wavs)
             
         else:
             # Padding
@@ -48,39 +47,60 @@ class NCBrain(sb.Brain):
             )
         
             # model forward
-            output_dict = self.modules.model(wavs)
+            output_dict = self.modules.generator(wavs)
             
             # Trimming
             output_dict["raw_wav"] = output_dict["raw_wav"][:, :, :samples]
             output_dict["est_wav"] = output_dict["est_wav"][:, :, :samples]
-
+        
+        # For STFT discriminator, comp factor is same as generator
+        fake_dict = self.modules.discriminator(output_dict["est_specs_comp"].detach())
+        real_dict = self.modules.discriminator(output_dict["specs_comp"])
+        
+        output_dict["fake_logits"], output_dict["fake_fm"] = fake_dict["logits"], fake_dict["fm"]
+        output_dict["real_logits"], output_dict["real_fm"] = real_dict["logits"], real_dict["fm"]
+        
         return output_dict
-
+    
     def compute_objectives(self, predictions, batch, stage):
         """
-        Computes the loss given the predicted and targeted outputs.
-
-        Args:
-            predictions (dict): The output dict from `compute_forward`.
-            batch (PaddedBatch): This batch object contains all the relevant tensors for computation.
-            stage (sb.Stage): One of sb.Stage.TRAIN, sb.Stage.VALID, or sb.Stage.TEST.
-
-        Returns:
-            torch.Tensor: A one-element tensor used for backpropagating the gradient.
+        Computes and combines generator and discriminator losses
         """
-
-        # Prepare clean targets for comparison
         raw_wav, lens = batch.wav
-        if len(raw_wav.shape) == 2:
-            raw_wav = raw_wav.unsqueeze(1)
+        raw_wav = raw_wav.unsqueeze(1)
+        
+        # Generator only
+        # Loss: loss_recon, loss_commitment
+        if self.hparams.epoch_counter.current < self.hparams.adv_epoch + 1:
+            loss_recon = self.hparams.compute_cost_recon(predict_dict=predictions)
+            loss_commit = self.hparams.compute_cost_commit(predict_dict=predictions)
+            loss = loss_recon + loss_commit
+        
+        # GAN
+        # Generator loss: loss_recon, loss_commitment, loss_adv, loss_fm(feature match)
+        # Discriminator loss: loss_adv
+        else:
+            loss_generator = self.hparams.compute_cost_g(predict_dict=predictions)
+            loss_discriminator = self.hparams.compute_cost_d(predict_dict=predictions)
+            loss = {**loss_generator, **loss_discriminator}
+        
+        # Log info
+        # Train stage: recon loss, commit loss
+        # Valid stage: recon loss, commit loss, stoi and pesq
+        # Test stage: stoi and pesq
+        if stage != sb.Stage.TEST:
+            self.loss_recon_metric.append(batch.id, predict_dict=predictions, lens=lens, reduction="batch")
+            self.loss_commit_metric.append(batch.id, predict_dict=predictions, lens=lens, reduction="batch")
 
-        # Total loss consists of loss_rencon and loss_vq
-        loss_recon = self.hparams.compute_cost_recon(predict_dict=predictions)
-        loss_commit = self.hparams.compute_cost_commit(predict_dict=predictions)
-        loss = loss_recon + loss_commit
+        if stage != sb.Stage.TRAIN:
+            self.stoi_metric.append(batch.id, predictions["est_wav"].squeeze(dim=1), raw_wav.squeeze(dim=1), lens, reduction="batch")
 
+            if stage == sb.Stage.TEST:
+                self.pesq_metric.append(batch.id, predict=predictions["est_wav"].squeeze(dim=1), target=raw_wav.squeeze(dim=1), lengths=lens)
+
+        # Log and save in test stage.
         if stage == sb.Stage.TEST and self.step <= self.hparams.log_save:
-
+            
             self.hparams.tensorboard_train_logger.log_audio(f"{batch.id[0]}_raw", raw_wav.squeeze(dim=0), self.hparams.sample_rate)
             self.hparams.tensorboard_train_logger.log_audio(f"{batch.id[0]}_coded", predictions["est_wav"].squeeze(dim=0), self.hparams.sample_rate)
 
@@ -99,15 +119,76 @@ class NCBrain(sb.Brain):
                 Path.mkdir(Path(self.hparams.samples_folder))
             torchaudio.save(Path(self.hparams.samples_folder).joinpath(f"{batch.id[0]}_raw.wav"), raw_wav.squeeze(dim=0).cpu(), self.hparams.sample_rate, bits_per_sample=16)
             torchaudio.save(Path(self.hparams.samples_folder).joinpath(f"{batch.id[0]}_coded.wav"), predictions["est_wav"].squeeze(dim=0).cpu(), self.hparams.sample_rate, bits_per_sample=16)
-
-        self.sisnr_metric.append(batch.id, predictions["est_wav"].squeeze(dim=1), raw_wav.squeeze(dim=1), lens, reduction="batch")
-
-        if stage != sb.Stage.TEST:
-            self.loss_recon_metric.append(batch.id, predict_dict=predictions, lens=lens, reduction="batch")
-            self.loss_commit_metric.append(batch.id, predict_dict=predictions, lens=lens, reduction="batch")
-
+            
         return loss
+    
+    def fit_batch(self, batch):
+        """
+        Train discriminator and generator adversarially
+        """
+        batch = batch.to(self.device)
+        output_dict = self.compute_forward(batch, sb.Stage.TRAIN)
+        
+        if self.hparams.epoch_counter.current < self.hparams.adv_epoch + 1:
+            # Train without adv loss
+            loss = self.compute_objectives(output_dict, batch, sb.core.Stage.TRAIN)
+            self.optimizer_g.zero_grad()
+            loss.backward()
+            self.optimizer_g.step()
+            
+            return loss.detach().cpu()
+        
+        else: 
+            # First train the discriminator
+            loss_d = self.compute_objectives(output_dict, batch, sb.core.Stage.TRAIN)["loss_d"]
+            self.optimizer_d.zero_grad()
+            loss_d.backward()
+            self.optimizer_d.step()
+            
+            # Update adv value for generator training
+            fake_dict = self.modules.discriminator(output_dict["est_specs_comp"])
+            real_dict = self.modules.discriminator(output_dict["specs_comp"])
+            output_dict["fake_logits"], output_dict["fake_fm"] = fake_dict["logits"], fake_dict["fm"]
+            output_dict["real_logits"], output_dict["real_fm"] = real_dict["logits"], real_dict["fm"]
+            
+            # Then train the generator
+            loss_g = self.compute_objectives(output_dict, batch, sb.core.Stage.TRAIN)["loss_g"]
+            self.optimizer_g.zero_grad()
+            loss_g.backward()
+            self.optimizer_g.step()
+            
+            return loss_g.detach().cpu()
+    
+    def evaluate_batch(self, batch, stage):
+        """Evaluate one batch
+        """
+        out = self.compute_forward(batch, stage=stage)
+        loss = self.compute_objectives(out, batch, stage=stage)
+        if self.hparams.epoch_counter.current < self.hparams.adv_epoch + 1:
+            return loss.detach().cpu()
+        else:
+            loss_g = loss["loss_g"]
+        return loss_g.detach().cpu()
+    
+    def init_optimizers(self):
+        """Called during ``on_fit_start()``, initialize optimizers
+        after parameters are fully configured (e.g. DDP, jit).
+        """
+        if self.opt_class is not None:
+            # opt_g_class, opt_d_class, sch_g_class, sch_d_class = self.opt_class
+            opt_g_class, opt_d_class = self.opt_class
+            
+            self.optimizer_g = opt_g_class(self.modules.generator.parameters())
+            self.optimizer_d = opt_d_class(self.modules.discriminator.parameters())
+            # self.scheduler_g = sch_g_class(self.optimizer_g)
+            # self.scheduler_d = sch_d_class(self.optimizer_d)
 
+            if self.checkpointer is not None:
+                self.checkpointer.add_recoverable("optimizer_g", self.optimizer_g)
+                self.checkpointer.add_recoverable("optimizer_d", self.optimizer_d)
+                # self.checkpointer.add_recoverable("scheduler_g", self.scheduler_d)
+                # self.checkpointer.add_recoverable("scheduler_d", self.scheduler_d)
+    
     def on_stage_start(self, stage, epoch=None):
         """
         Gets called at the beginning of each epoch.
@@ -117,9 +198,6 @@ class NCBrain(sb.Brain):
             epoch (int, optional): The currently-starting epoch. This is passed `None` during the test stage. Defaults to None.
         """
         
-        self.sisnr_metric = sb.utils.metric_stats.MetricStats(
-            metric=si_snr_loss.si_snr_loss 
-        )
 
         # Log the reconstruct and the commit loss in train/valid stage.
         if stage != sb.Stage.TEST:
@@ -130,8 +208,25 @@ class NCBrain(sb.Brain):
             self.loss_commit_metric = sb.utils.metric_stats.MetricStats(
                 metric=self.hparams.compute_cost_commit
             )
-        
 
+        def pesq_eval(pred_wav, target_wav):
+            """Computes the PESQ evaluation metric"""
+            return pesq(
+                fs=16000,
+                ref=target_wav.numpy(),
+                deg=pred_wav.numpy(),
+                mode="wb",
+            )
+
+        if stage != sb.Stage.TRAIN:
+            
+            self.stoi_metric = sb.utils.metric_stats.MetricStats(metric=stoi_loss.stoi_loss)
+            
+            if stage == sb.Stage.TEST:
+                self.pesq_metric = sb.utils.metric_stats.MetricStats(
+                    metric=pesq_eval, n_jobs=self.hparams.pesq_n_jobs, batch_eval=False
+                )
+    
     def on_stage_end(self, stage, stage_loss, epoch=None):
         """
         Gets called at the end of an epoch.
@@ -144,16 +239,15 @@ class NCBrain(sb.Brain):
 
         # Store the train loss until the validation stage.
         if stage == sb.Stage.TRAIN:
+
             # Define the train's stats as attributes to be counted at the valid stage.
             self.train_stats = {
                 "loss_recon": self.loss_recon_metric.summarize("average"),
-                "loss_commit": self.loss_commit_metric.summarize("average"), 
-                "sisnr": -self.sisnr_metric.summarize("average")
+                "loss_commit": self.loss_commit_metric.summarize("average")
             }
             self.train_stats_tb = {
                 "loss_recon": self.loss_recon_metric.scores,
-                "loss_commit": self.loss_commit_metric.scores, 
-                "sisnr": [-i for i in self.sisnr_metric.scores]
+                "loss_commit": self.loss_commit_metric.scores
             }
         # Summarize the statistics from the stage for record-keeping.
             
@@ -161,22 +255,24 @@ class NCBrain(sb.Brain):
         # At the end of validation, we can write stats and checkpoints
         if stage == sb.Stage.VALID:
                 
-            if self.hparams.sched:
-                current_lr, next_lr = self.hparams.lr_scheduler(
-                    [self.optimizer], epoch, stage_loss
-                )
-                sb.nnet.schedulers.update_learning_rate(self.optimizer, next_lr)
+            # Update learning rate
+            # self.scheduler_g.step()
+            # self.scheduler_d.step()
+            # lr_g = self.optimizer_g.param_groups[-1]["lr"]
+            # lr_d = self.optimizer_d.param_groups[-1]["lr"]
+            if self.hparams.epoch_counter.current == self.hparams.adv_epoch:
+                sb.nnet.schedulers.update_learning_rate(self.optimizer_g, self.hparams.lr_gen)
 
             valid_stats = {
                 "loss_recon": self.loss_recon_metric.summarize("average"),
                 "loss_commit": self.loss_commit_metric.summarize("average"), 
-                "sisnr": -self.sisnr_metric.summarize("average")
+                "stoi": -self.stoi_metric.summarize("average")
             }
 
             valid_stats_tb = {
                 "loss_recon": self.loss_recon_metric.scores,
                 "loss_commit": self.loss_commit_metric.scores, 
-                "sisnr": [-i for i in self.sisnr_metric.scores]
+                "stoi": [-i for i in self.stoi_metric.scores]
             }
             
             # The train_logger writes a summary to stdout and to the logfile.
@@ -193,14 +289,15 @@ class NCBrain(sb.Brain):
             )
 
             # Save the current checkpoint and delete previous checkpoints,
-            # unless they have the current best sisnr score.
-            self.checkpointer.save_and_keep_only(meta=valid_stats, max_keys=["sisnr"])
+            # unless they have the current best pesq score.
+            self.checkpointer.save_and_keep_only(meta=valid_stats, max_keys=["stoi"])
 
         # We also write statistics about test data to stdout and to the logfile.
         if stage == sb.Stage.TEST:
 
             test_stats = {
-                "sisnr": -self.sisnr_metric.summarize("average")
+                "pesq": self.pesq_metric.summarize("average"),
+                "stoi": -self.stoi_metric.summarize("average")
             }
 
             self.hparams.train_logger.log_stats(
@@ -226,47 +323,23 @@ def dataio_prep(hparams):
         dict: Contains two keys, "train" and "valid" that correspond to the appropriate DynamicItemDataset object.
     """
 
-    # Define audio pipeline.
-    # It is scalable for other requirements in coding tasks, such as enhancement, packet loss.
-    @sb.utils.data_pipeline.takes("path", "length", "evaluate")
-    # Takes the key of the json file.
+
+    # Define audio pipeline:
+    @sb.utils.data_pipeline.takes("path", "segment")
     @sb.utils.data_pipeline.provides("wav")
-    # Provides("wav") -> using batch.wav
-    def audio_pipeline(path, length, evaluate):
-        """
-        On the train stage, the audio is cropped and cut to a single channel in a given way.
-        On the valid or test stage, the whole segment of the mixture audio is used, which is converted to a single channel using avg-to-mono.
-        """
-        mono_type = hparams["mono_type"]
-        if not evaluate:
-            # Second -> samples, 1s = 44100samples
-            segment = hparams["segment"] * hparams["sample_rate"]
-            length = int(length * hparams["sample_rate"])
-            
-            max_audio_start = length - segment
-            audio_start = torch.randint(0, max_audio_start, (1,))
-            audio_stop = audio_start + segment
-            
-            # Get wav with the shape [samples, channels]
-            wav = sb.dataio.dataio.read_audio({
-                "file": path,
-                "start": audio_start,
-                "stop": audio_stop
-            })
-            
-            if mono_type == 'avg':
-                wav = torch.mean(wav, 1)
-            elif mono_type == 'split':
-                channel = torch.randint(0, 2, (1,))
-                wav = wav[:, channel]
-                
-        else:
-            wav = sb.dataio.dataio.read_audio(path)
-            if mono_type:
-                wav = torch.mean(wav, 1)
-        
-        # Padded in collate_fn later
-        # The shape of wav after padded is [B, samples, channels]
+    def audio_pipeline(path, segment):
+        wav = sb.dataio.dataio.read_audio(path)
+        if segment:
+            segment_size = hparams["segment_size"] * hparams["sample_rate"]
+            if wav.size(0) > segment_size:
+                max_audio_start = wav.size(0) - segment_size
+                audio_start = torch.randint(0, max_audio_start, (1,))
+                wav = wav[audio_start : audio_start + segment_size]
+            else:
+                wav = torch.nn.functional.pad(
+                    wav, (0, segment_size - wav.size(0)), "constant"
+                )
+
         return wav
 
     datasets = {}
@@ -307,17 +380,21 @@ if __name__ == "__main__":
     )
 
     # Data preparation, to be run on only one process.
-    sb.utils.distributed.run_on_main(
-        prepare_musdb18,
-        kwargs={
-            'data_folder':hparams["data_folder"],
-            'save_json_train':hparams["train_annotation"],
-            'save_json_valid':hparams["valid_annotation"],
-            'save_json_test':hparams["test_annotation"],
-            'split_ratio':hparams["split_ratio"],
-            'audio_type':hparams["audio_type"]
-        },
-    )
+    if not hparams["skip_prep"]:
+        sb.utils.distributed.run_on_main(
+            prepare_libritts,
+            kwargs={
+                'data_folder':hparams["data_folder"],
+                'save_json_train':hparams["train_annotation"],
+                'save_json_valid':hparams["valid_annotation"],
+                'save_json_test':hparams["test_annotation"],
+                "sample_rate": hparams["sample_rate"],
+                "train_subsets": hparams["train_subsets"],
+                "valid_subsets": hparams["valid_subsets"],
+                "test_subsets": hparams["test_subsets"],
+                "min_duration": hparams["min_duration"]
+            },
+        )
         
 
     # Create dataset objects "train" and "valid"
@@ -326,7 +403,10 @@ if __name__ == "__main__":
     # Initialize the Brain object to prepare for mask training.
     nc_brain = NCBrain(
         modules=hparams["modules"],
-        opt_class=hparams["opt_class"],
+        opt_class=[
+            hparams["opt_class_generator"],
+            hparams["opt_class_discriminator"]
+        ],
         hparams=hparams,
         run_opts=run_opts,
         checkpointer=hparams["checkpointer"],
@@ -337,16 +417,16 @@ if __name__ == "__main__":
     # with changing state are managed by the Checkpointer, training can be
     # stopped at any point, and will be resumed on next call.
     nc_brain.fit(
-            epoch_counter=nc_brain.hparams.epoch_counter,
-            train_set=datasets["train"],
-            valid_set=datasets["valid"],
-            train_loader_kwargs=hparams["train_dataloader_options"],
-            valid_loader_kwargs=hparams["valid_dataloader_options"],
+        epoch_counter=nc_brain.hparams.epoch_counter,
+        train_set=datasets["train"],
+        valid_set=datasets["valid"],
+        train_loader_kwargs=hparams["train_dataloader_options"],
+        valid_loader_kwargs=hparams["valid_dataloader_options"],
     )
 
     # Load best checkpoint (highest SISNR) for evaluation
     test_stats = nc_brain.evaluate(
         test_set=datasets["test"],
-        max_key="sisnr",
+        max_key="stoi",
         test_loader_kwargs=hparams["test_dataloader_options"],
     )
