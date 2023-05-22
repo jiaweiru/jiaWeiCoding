@@ -191,35 +191,109 @@ def ri_multimel_loss(mel_dict, level, predict_dict, cost_ri, cost_multimel, mel_
     return loss_ri * cost_ri + loss_multimel * cost_multimel
 
 
-def generator_loss(predict_dict, lens=None, reduction="mean"):
-    # Generator loss: loss_recon, loss_commitment, loss_adv, loss_fm(feature match)
-    mel_dict = {
-        "sample_rate": 16000,
-        "n_mels": 64,
-        "f_min": 0,
-        "f_max": 8000,
-        "power": 1,
-        "norm": "slaney",
-        "mel_scale": "slaney",
-        "normalized": False
-    }
-    loss_recon = magri_multimel_loss(mel_dict=mel_dict, level=(6, 11),
-                                     predict_dict=predict_dict, cost_magri=1.0, cost_multimel=1.0, mel_tp='l1', 
-                                     lens=lens, reduction=reduction)
-    loss_commit = commit_loss(predict_dict=predict_dict, cost=0.1, lens=lens, reduction=reduction)
-    loss_adv = torch.mean((predict_dict["fake_logits"] - 1.) ** 2)
-    
-    loss_fm = 0.
-    for real_f, fake_f in zip(predict_dict["real_fm"], predict_dict["fake_fm"]):
-        loss_fm += F.l1_loss(real_f, fake_f)
-    loss_fm = loss_fm / len(predict_dict["real_fm"])
-    
-    loss_g = loss_recon + loss_commit + loss_adv + loss_fm
-    
-    return {"loss_g": loss_g, "loss_recon": loss_recon, "loss_commit": loss_commit}
+# For fine-tune GAN
+class CommitLoss(nn.Module):
+
+    def __init__(self,):
+        super().__init__()
+        self.loss_func = nn.MSELoss()
+
+    def forward(self, feats, quantized_feats):
+        
+        return self.loss_func(feats, quantized_feats)
 
 
-def discriminator_loss(predict_dict, lens=None, reduction="mean"):
-    loss_d = (torch.mean((predict_dict["real_logits"] - 1.) ** 2) + torch.mean((predict_dict["fake_logits"]) ** 2))
+class GeneratorLoss(nn.Module):
+
+    def __init__(
+        self,
+        stft_loss=None,
+        stft_loss_weight=0,
+        mseg_loss=None,
+        mseg_loss_weight=0,
+        feat_match_loss=None,
+        feat_match_loss_weight=0,
+        l1_spec_loss=None,
+        l1_spec_loss_weight=0,
+        commit_loss=None,
+        commit_loss_weight=0
+    ):
+        super().__init__()
+        self.stft_loss = stft_loss
+        self.stft_loss_weight = stft_loss_weight
+        self.mseg_loss = mseg_loss
+        self.mseg_loss_weight = mseg_loss_weight
+        self.feat_match_loss = feat_match_loss
+        self.feat_match_loss_weight = feat_match_loss_weight
+        self.l1_spec_loss = l1_spec_loss
+        self.l1_spec_loss_weight = l1_spec_loss_weight
+        self.commit_loss = commit_loss
+        self.commit_loss_weight = commit_loss_weight
+
+    def _apply_G_adv_loss(self, scores_fake, loss_func):
+
+        adv_loss = 0
+        if isinstance(scores_fake, list):
+            for score_fake in scores_fake:
+                fake_loss = loss_func(score_fake)
+                adv_loss += fake_loss
+            # adv_loss /= len(scores_fake)
+        else:
+            fake_loss = loss_func(scores_fake)
+            adv_loss = fake_loss
+        return adv_loss
     
-    return {"loss_d": loss_d}
+    def forward(
+        self,
+        y_hat=None,
+        y=None,
+        scores_fake=None,
+        feats_fake=None,
+        feats_real=None,
+        feats=None,
+        feats_q=None
+    ):
+
+        gen_loss = 0
+        adv_loss = 0
+        loss = {}
+
+        # STFT Loss
+        if self.stft_loss:
+            stft_loss_mg, stft_loss_sc = self.stft_loss(
+                y_hat[:, :, : y.size(2)].squeeze(1), y.squeeze(1)
+            )
+            loss["G_stft_loss_mg"] = stft_loss_mg
+            loss["G_stft_loss_sc"] = stft_loss_sc
+            gen_loss = gen_loss + self.stft_loss_weight * (
+                stft_loss_mg + stft_loss_sc
+            )
+
+        # L1 Spec loss
+        if self.l1_spec_loss:
+            l1_spec_loss = self.l1_spec_loss(y_hat, y)
+            loss["G_l1_spec_loss"] = l1_spec_loss
+            gen_loss = gen_loss + self.l1_spec_loss_weight * l1_spec_loss
+
+        # Commitment loss
+        if self.commit_loss:
+            loss_commit = self.commit_loss(feats, feats_q)
+            loss["G_commit_loss"] = loss_commit
+            gen_loss = gen_loss + self.commit_loss_weight * loss_commit
+        
+        # multiscale MSE adversarial loss
+        if self.mseg_loss and scores_fake is not None:
+            mse_fake_loss = self._apply_G_adv_loss(scores_fake, self.mseg_loss)
+            loss["G_mse_fake_loss"] = mse_fake_loss
+            adv_loss = adv_loss + self.mseg_loss_weight * mse_fake_loss
+
+        # Feature Matching Loss
+        if self.feat_match_loss and feats_fake is not None:
+            feat_match_loss = self.feat_match_loss(feats_fake, feats_real)
+            loss["G_feat_match_loss"] = feat_match_loss
+            adv_loss = adv_loss + self.feat_match_loss_weight * feat_match_loss
+        loss["G_loss"] = gen_loss + adv_loss
+        loss["G_gen_loss"] = gen_loss
+        loss["G_adv_loss"] = adv_loss
+
+        return loss

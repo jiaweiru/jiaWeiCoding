@@ -24,14 +24,14 @@ tensorboard_logs: !ref <output_folder>/tb_logs
 
 # Path where data manifest files will be stored
 # The data manifest files are created by the data preparation script.
-train_annotation: !ref <json_folder>/speech_train.json
-valid_annotation: !ref <json_folder>/speech_valid.json
-test_annotation: !ref <json_folder>/speech_test.json
+train_annotation: !ref <json_folder>/speech_train_0.5s.json
+valid_annotation: !ref <json_folder>/speech_valid_0.5s.json
+test_annotation: !ref <json_folder>/speech_test_0.5s.json
 train_subsets: ["train-clean-100", "train-clean-360"]
 valid_subsets: ["dev-clean"]
 test_subsets: ["test-clean"]
 skip_prep: False
-segment_size: 3
+segment_size: 0.5
 min_duration:
     train: 0
     valid: 0.6
@@ -45,13 +45,12 @@ tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
     save_dir: !ref <tensorboard_logs>
 
 # Training Parameters
-number_of_epochs: 400
-adv_epoch: 200
+number_of_epochs: 200
 batch_size: 64
-lr: 0.0003
-lr_gen: 0.00003
-lr_disc: 0.0003
 max_grad_norm: 5.0
+
+fine_tune: True
+trained_generator: /home/sturjw/Code/jiaWeiCoding/results/speech/2234/ARN_mel_l1_RI/save/CKPT+2023-05-12+20-52-53+00/model.ckpt
 
 # Test stage:
 # Visualize and save the first few audios
@@ -75,28 +74,17 @@ test_dataloader_options:
     batch_size: 1
     shuffle: False
 
-# no adv train
-compute_cost_recon: !name:models.magri_multimel_loss
-    mel_dict:
-        sample_rate: 16000
-        n_mels: 64
-        f_min: 0
-        f_max: 8000
-        power: 1
-        norm: "slaney"
-        mel_scale: "slaney"
-        normalized: False
-    level: (6, 11)
-    cost_magri: 1.0
-    cost_multimel: 1.0
-    mel_tp: l1
+# logging
+# TODO: turn to other metrics
 compute_cost_commit: !name:models.commit_loss
-    cost: 0.1
+    cost: 5.0
 
 # adv train
-# TODO: set hparams in this yaml
-compute_cost_g: !name:models.generator_loss
-compute_cost_d: !name:models.discriminator_loss
+learning_rate_g: 0.00003
+learning_rate_d: 0.0003
+weight_decay: 0.9999
+adam_b1: 0.8
+adam_b2: 0.99
 
 generator: !new:models.ARN
     win_len: !ref <win_length>
@@ -116,7 +104,7 @@ generator: !new:models.ARN
     comp_law: power-law
     alpha: 0.5
 
-discriminator: !new:models.STFTDiscriminator
+discriminator: !new:speechbrain.lobes.models.HifiGAN.HifiganDiscriminator
 
 # The first object passed to the Brain class is this "Epoch Counter"
 # which is saved by the Checkpointer so that training can be resumed
@@ -130,20 +118,63 @@ modules:
     generator: !ref <generator>
     discriminator: !ref <discriminator>
 
-# This optimizer will be constructed by the Brain class after all parameters
-# are moved to the correct device. Then it will be added to the checkpointer.
+#generator loss
+stft_loss: null
+commit_loss: !new:models.CommitLoss
+mseg_loss: !new:speechbrain.lobes.models.HifiGAN.MSEGLoss
+feat_match_loss: !new:speechbrain.lobes.models.HifiGAN.MelganFeatureLoss
+l1_spec_loss: !new:speechbrain.lobes.models.HifiGAN.L1SpecLoss
+  sample_rate: !ref <sample_rate>
+  hop_length: 256
+  win_length: 1024
+  n_mel_channels: 80
+  n_fft: 1024
+  n_stft: 513
+  mel_fmin: 0.0
+  mel_fmax: null
+  mel_normalized: False
+  power: 1
+  dynamic_range_compression: Ture
+
+generator_loss: !new:models.GeneratorLoss
+  stft_loss: !ref <stft_loss>
+  stft_loss_weight: 0
+  mseg_loss: !ref <mseg_loss>
+  mseg_loss_weight: 1
+  feat_match_loss: !ref <feat_match_loss>
+  feat_match_loss_weight: 10
+  l1_spec_loss: !ref  <l1_spec_loss>
+  l1_spec_loss_weight: 45
+  commit_loss: !ref <commit_loss>
+  commit_loss_weight: 0.1
+
+#discriminator loss
+msed_loss: !new:speechbrain.lobes.models.HifiGAN.MSEDLoss
+
+discriminator_loss: !new:speechbrain.lobes.models.HifiGAN.DiscriminatorLoss
+  msed_loss: !ref <msed_loss>
+
+#optimizer
 opt_class_generator: !name:torch.optim.Adam
-  lr: !ref <lr>
+  lr: !ref <learning_rate_g>
+  betas: [!ref <adam_b1>, !ref <adam_b2>]
 
 opt_class_discriminator: !name:torch.optim.Adam
-  lr: !ref <lr_disc>
+  lr: !ref <learning_rate_d>
+  betas: [!ref <adam_b1>, !ref <adam_b2>]
 
-# This object is used for saving the state of training both so that it
-# can be resumed if it gets interrupted, and also so that the best checkpoint
-# can be later loaded for evaluation or inference.
+sch_class_generator: !name:torch.optim.lr_scheduler.ExponentialLR
+  gamma: !ref <weight_decay>
+  last_epoch: -1
+
+sch_class_discriminator: !name:torch.optim.lr_scheduler.ExponentialLR
+  gamma: !ref <weight_decay>
+  last_epoch: -1
+
+#checkpointer
 checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
-    checkpoints_dir: !ref <save_folder>
-    recoverables:
-        generator: !ref <generator>
-        discriminator: !ref <discriminator>
-        counter: !ref <epoch_counter>
+  checkpoints_dir: !ref <save_folder>
+  recoverables:
+    generator: !ref <generator>
+    discriminator: !ref <discriminator>
+    counter: !ref <epoch_counter>

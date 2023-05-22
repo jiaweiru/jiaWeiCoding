@@ -72,7 +72,7 @@ def prepare_libritts(
         for subset_name in subset:
 
             subset_folder = os.path.join(data_folder, subset_name)
-            subset_archive = os.path.join(subset_folder, subset_name + ".tar.gz")
+            subset_archive = os.path.join(data_folder, subset_name + ".tar.gz")
 
             subset_data = os.path.join(subset_folder, "LibriTTS")
             if not check_folders(subset_data):
