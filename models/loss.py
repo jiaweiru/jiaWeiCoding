@@ -201,8 +201,57 @@ class CommitLoss(nn.Module):
     def forward(self, feats, quantized_feats):
         
         return self.loss_func(feats, quantized_feats)
+    
+class MagRILoss(nn.Module):
+    
+    def __init__(self):
+        super().__init__()
+        self.loss_func = nn.MSELoss()
+    
+    def forward(self, mag, mag_hat, ri, ri_hat):
+        loss_mag = self.loss_func(mag, mag_hat)
+        bins = ri.shape[1] // 2
+        loss_ri = self.loss_func(ri[:, :bins, :], ri_hat[:, :bins, :]) + self.loss_func(ri[:, bins:, :], ri_hat[:, bins:, :])
 
+        return loss_mag + loss_ri
 
+class MultiScaleMelLoss(nn.Module):
+    
+    def __init__(self, mel_dict):
+        super().__init__()
+        
+        self.mel_dict = mel_dict
+        
+        if self.mel_dict["loss_tp"] == 'l2':
+            self.loss_func = nn.MSELoss()
+        elif self.mel_dict["loss_tp"] == 'l1':
+            self.loss_func = nn.L1Loss()
+        
+    def forward(self, est_wav, raw_wav):
+        
+        loss = 0
+        for i in range(self.mel_dict["level"][0], self.mel_dict["level"][1] + 1):
+            self.mel_dict["hop_length"] = 2 ** i // 4
+            self.mel_dict["win_length"] = 2 ** i
+            self.mel_dict["n_fft"] = 2 ** i
+    
+            audio2mel = transforms.MelSpectrogram(sample_rate=self.mel_dict["sample_rate"], hop_length=self.mel_dict["hop_length"], \
+                win_length=self.mel_dict["win_length"], n_fft=self.mel_dict["n_fft"], n_mels=self.mel_dict["n_mels"], f_min=self.mel_dict["f_min"], \
+                    f_max=self.mel_dict["f_max"], power=self.mel_dict["power"], normalized=self.mel_dict["normalized"], norm=self.mel_dict["norm"], \
+                        mel_scale=self.mel_dict["mel_scale"]).to(raw_wav.device)
+            
+            raw_mel = audio2mel(raw_wav)
+            est_mel = audio2mel(est_wav)
+            raw_mel = torch.log(torch.clamp(raw_mel, min=1e-5) * 1)
+            est_mel = torch.log(torch.clamp(est_mel, min=1e-5) * 1)
+            
+            loss += self.loss_func(raw_mel, est_mel)
+            
+        loss = loss / (self.mel_dict["level"][1] + 1 - self.mel_dict["level"][0])
+        
+        return loss
+        
+        
 class GeneratorLoss(nn.Module):
 
     def __init__(
@@ -213,8 +262,10 @@ class GeneratorLoss(nn.Module):
         mseg_loss_weight=0,
         feat_match_loss=None,
         feat_match_loss_weight=0,
-        l1_spec_loss=None,
-        l1_spec_loss_weight=0,
+        magri_loss=None,
+        magri_loss_weight=0,
+        multimel_loss=None,
+        multimel_loss_weight=0,
         commit_loss=None,
         commit_loss_weight=0
     ):
@@ -225,8 +276,10 @@ class GeneratorLoss(nn.Module):
         self.mseg_loss_weight = mseg_loss_weight
         self.feat_match_loss = feat_match_loss
         self.feat_match_loss_weight = feat_match_loss_weight
-        self.l1_spec_loss = l1_spec_loss
-        self.l1_spec_loss_weight = l1_spec_loss_weight
+        self.magri_loss = magri_loss
+        self.magri_loss_weight = magri_loss_weight
+        self.multimel_loss = multimel_loss
+        self.multimel_loss_weight = multimel_loss_weight
         self.commit_loss = commit_loss
         self.commit_loss_weight = commit_loss_weight
 
@@ -250,6 +303,10 @@ class GeneratorLoss(nn.Module):
         scores_fake=None,
         feats_fake=None,
         feats_real=None,
+        mag_hat=None,
+        mag=None,
+        ri_hat=None,
+        ri=None,
         feats=None,
         feats_q=None
     ):
@@ -269,18 +326,24 @@ class GeneratorLoss(nn.Module):
                 stft_loss_mg + stft_loss_sc
             )
 
-        # L1 Spec loss
-        if self.l1_spec_loss:
-            l1_spec_loss = self.l1_spec_loss(y_hat, y)
-            loss["G_l1_spec_loss"] = l1_spec_loss
-            gen_loss = gen_loss + self.l1_spec_loss_weight * l1_spec_loss
+        # MagRI loss
+        if self.magri_loss:
+            loss_magri = self.magri_loss(mag, mag_hat, ri, ri_hat)
+            loss["G_magri_loss"] = loss_magri
+            gen_loss = gen_loss + self.magri_loss_weight * loss_magri
+            
+        # Multi Scale Mel loss
+        if self.multimel_loss:
+            loss_multimel = self.multimel_loss(y_hat, y)
+            loss["G_multimel_loss"] = loss_multimel
+            gen_loss = gen_loss + self.multimel_loss_weight * loss_multimel
 
         # Commitment loss
         if self.commit_loss:
             loss_commit = self.commit_loss(feats, feats_q)
             loss["G_commit_loss"] = loss_commit
             gen_loss = gen_loss + self.commit_loss_weight * loss_commit
-        
+
         # multiscale MSE adversarial loss
         if self.mseg_loss and scores_fake is not None:
             mse_fake_loss = self._apply_G_adv_loss(scores_fake, self.mseg_loss)
@@ -293,7 +356,7 @@ class GeneratorLoss(nn.Module):
             loss["G_feat_match_loss"] = feat_match_loss
             adv_loss = adv_loss + self.feat_match_loss_weight * feat_match_loss
         loss["G_loss"] = gen_loss + adv_loss
-        loss["G_gen_loss"] = gen_loss
+        loss["G_gen_loss"] = gen_loss + adv_loss - adv_loss
         loss["G_adv_loss"] = adv_loss
 
         return loss

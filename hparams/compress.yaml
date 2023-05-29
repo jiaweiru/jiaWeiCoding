@@ -4,7 +4,7 @@ sample_rate: 44100
 stream_head: jiaweizuishuai
 identifier: jiaweiwudi
 device: cpu
-ckpt_path: /home/sturjw/Code/jiaWeiCoding/results/audio/4234/ARN_853K_baseline/save/CKPT+2023-04-21+14-49-43+00/model.ckpt
+ckpt_path: /home/sturjw/Code/jiaWeiCoding/results/speech/2234/ARN_GAN_finetune_2/save/CKPT+2023-05-29+02-06-22+00/generator.ckpt
 
 win_length: 1764
 hop_length: 441

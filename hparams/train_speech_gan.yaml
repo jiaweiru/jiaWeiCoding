@@ -15,7 +15,7 @@ __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 data_folder: /home/sturjw/Datasets/LibriTTS
 json_folder: ./json
 
-output_folder: !ref ./results/speech/<seed>/ARN_GAN
+output_folder: !ref ./results/speech/<seed>/ARN_GAN_finetune_2
 save_folder: !ref <output_folder>/save
 samples_folder: !ref <output_folder>/test_samples
 
@@ -26,7 +26,7 @@ tensorboard_logs: !ref <output_folder>/tb_logs
 # The data manifest files are created by the data preparation script.
 train_annotation: !ref <json_folder>/speech_train_0.5s.json
 valid_annotation: !ref <json_folder>/speech_valid_0.5s.json
-test_annotation: !ref <json_folder>/speech_test_0.5s.json
+test_annotation: !ref <json_folder>/speech_test.json
 train_subsets: ["train-clean-100", "train-clean-360"]
 valid_subsets: ["dev-clean"]
 test_subsets: ["test-clean"]
@@ -45,7 +45,7 @@ tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
     save_dir: !ref <tensorboard_logs>
 
 # Training Parameters
-number_of_epochs: 200
+number_of_epochs: 100
 batch_size: 64
 max_grad_norm: 5.0
 
@@ -73,11 +73,6 @@ valid_dataloader_options:
 test_dataloader_options:
     batch_size: 1
     shuffle: False
-
-# logging
-# TODO: turn to other metrics
-compute_cost_commit: !name:models.commit_loss
-    cost: 5.0
 
 # adv train
 learning_rate_g: 0.00003
@@ -119,22 +114,24 @@ modules:
     discriminator: !ref <discriminator>
 
 #generator loss
+mel_dict:
+        sample_rate: 16000
+        n_mels: 64
+        f_min: 0
+        f_max: 8000
+        power: 1
+        norm: "slaney"
+        mel_scale: "slaney"
+        normalized: False
+        level: (6, 11)
+        loss_tp: l1
 stft_loss: null
 commit_loss: !new:models.CommitLoss
+magri_loss: !new:models.MagRILoss
 mseg_loss: !new:speechbrain.lobes.models.HifiGAN.MSEGLoss
 feat_match_loss: !new:speechbrain.lobes.models.HifiGAN.MelganFeatureLoss
-l1_spec_loss: !new:speechbrain.lobes.models.HifiGAN.L1SpecLoss
-  sample_rate: !ref <sample_rate>
-  hop_length: 256
-  win_length: 1024
-  n_mel_channels: 80
-  n_fft: 1024
-  n_stft: 513
-  mel_fmin: 0.0
-  mel_fmax: null
-  mel_normalized: False
-  power: 1
-  dynamic_range_compression: Ture
+multimel_loss: !new:models.MultiScaleMelLoss
+  mel_dict: !ref <mel_dict>
 
 generator_loss: !new:models.GeneratorLoss
   stft_loss: !ref <stft_loss>
@@ -142,11 +139,13 @@ generator_loss: !new:models.GeneratorLoss
   mseg_loss: !ref <mseg_loss>
   mseg_loss_weight: 1
   feat_match_loss: !ref <feat_match_loss>
-  feat_match_loss_weight: 10
-  l1_spec_loss: !ref  <l1_spec_loss>
-  l1_spec_loss_weight: 45
+  feat_match_loss_weight: 100
+  magri_loss: !ref  <magri_loss>
+  magri_loss_weight: 100
+  multimel_loss: !ref <multimel_loss>
+  multimel_loss_weight: 100
   commit_loss: !ref <commit_loss>
-  commit_loss_weight: 0.1
+  commit_loss_weight: 10
 
 #discriminator loss
 msed_loss: !new:speechbrain.lobes.models.HifiGAN.MSEDLoss

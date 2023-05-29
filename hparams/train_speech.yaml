@@ -15,7 +15,7 @@ __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 data_folder: /home/sturjw/Datasets/LibriTTS
 json_folder: ./json
 
-output_folder: !ref ./results/speech/<seed>/ARN_mel_l1_RI
+output_folder: !ref ./results/speech/<seed>/ARN_mel_l1
 save_folder: !ref <output_folder>/save
 samples_folder: !ref <output_folder>/test_samples
 
@@ -72,7 +72,7 @@ test_dataloader_options:
     batch_size: 1
     shuffle: False
 
-compute_cost_recon: !name:models.ri_multimel_loss
+compute_cost_recon: !name:models.magri_multimel_loss
     mel_dict:
         sample_rate: 16000
         n_mels: 64
@@ -83,7 +83,7 @@ compute_cost_recon: !name:models.ri_multimel_loss
         mel_scale: "slaney"
         normalized: False
     level: (6, 11)
-    cost_ri: 1.0
+    cost_magri: 1.0
     cost_multimel: 1.0
     mel_tp: l1
 compute_cost_commit: !name:models.commit_loss

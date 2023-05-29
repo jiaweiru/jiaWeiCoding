@@ -74,7 +74,7 @@ class NCBrain(sb.Brain):
         
         # GAN
         loss_g = self.hparams.generator_loss(
-            predictions["est_wav"], predictions["raw_wav"], predictions["scores_fake"], predictions["feats_fake"], predictions["feats_real"], predictions["feature"], predictions["quantized_feature"]
+            predictions["est_wav"], predictions["raw_wav"], predictions["scores_fake"], predictions["feats_fake"], predictions["feats_real"], predictions["mags_comp"], predictions["est_mags_comp"], predictions["specs_comp"], predictions["est_specs_comp"], predictions["feature"], predictions["quantized_feature"]
         )
         loss_d = self.hparams.discriminator_loss(predictions["scores_fake"], predictions["scores_real"])
         loss = {**loss_g, **loss_d}
@@ -92,13 +92,15 @@ class NCBrain(sb.Brain):
             
             self.hparams.tensorboard_train_logger.log_audio(f"{batch.id[0]}_raw", raw_wav.squeeze(dim=0), self.hparams.sample_rate)
             self.hparams.tensorboard_train_logger.log_audio(f"{batch.id[0]}_coded", predictions["est_wav"].squeeze(dim=0), self.hparams.sample_rate)
+            
+            demo_pesq = pesq(fs=16000, ref=raw_wav[0][0].cpu().numpy(), deg=predictions["est_wav"][0][0].cpu().numpy(), mode="wb",)
 
             coded_mag, _ = librosa.magphase(librosa.stft(predictions["est_wav"].squeeze().cpu().detach().numpy(), n_fft=self.hparams.n_fft, hop_length=self.hparams.hop_length, win_length=self.hparams.win_length))
             raw_mag, _ = librosa.magphase(librosa.stft(raw_wav.squeeze().cpu().detach().numpy(), n_fft=self.hparams.n_fft, hop_length=self.hparams.hop_length, win_length=self.hparams.win_length))
 
             fig, axes = plt.subplots(2, 1, figsize=(6, 6))
             librosa.display.specshow(librosa.amplitude_to_db(coded_mag), cmap="magma", y_axis="linear", ax=axes[0], sr=self.hparams.sample_rate)
-            axes[0].set_title('coded spec')
+            axes[0].set_title(f'coded spec, {demo_pesq}')
             librosa.display.specshow(librosa.amplitude_to_db(raw_mag), cmap="magma", y_axis="linear", ax=axes[1], sr=self.hparams.sample_rate)
             axes[1].set_title('raw spec')
             plt.tight_layout()
@@ -452,6 +454,6 @@ if __name__ == "__main__":
     # Load best checkpoint (highest SISNR) for evaluation
     test_stats = nc_brain.evaluate(
         test_set=datasets["test"],
-        max_key="stoi",
+        max_key=None,
         test_loader_kwargs=hparams["test_dataloader_options"],
     )

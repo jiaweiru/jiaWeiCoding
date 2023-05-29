@@ -96,13 +96,15 @@ class NCBrain(sb.Brain):
             
             self.hparams.tensorboard_train_logger.log_audio(f"{batch.id[0]}_raw", raw_wav.squeeze(dim=0), self.hparams.sample_rate)
             self.hparams.tensorboard_train_logger.log_audio(f"{batch.id[0]}_coded", predictions["est_wav"].squeeze(dim=0), self.hparams.sample_rate)
+            
+            demo_pesq = pesq(fs=16000, ref=raw_wav[0][0].cpu().numpy(), deg=predictions["est_wav"][0][0].cpu().numpy(), mode="wb",)
 
             coded_mag, _ = librosa.magphase(librosa.stft(predictions["est_wav"].squeeze().cpu().detach().numpy(), n_fft=self.hparams.n_fft, hop_length=self.hparams.hop_length, win_length=self.hparams.win_length))
             raw_mag, _ = librosa.magphase(librosa.stft(raw_wav.squeeze().cpu().detach().numpy(), n_fft=self.hparams.n_fft, hop_length=self.hparams.hop_length, win_length=self.hparams.win_length))
 
             fig, axes = plt.subplots(2, 1, figsize=(6, 6))
             librosa.display.specshow(librosa.amplitude_to_db(coded_mag), cmap="magma", y_axis="linear", ax=axes[0], sr=self.hparams.sample_rate)
-            axes[0].set_title('coded spec')
+            axes[0].set_title(f'coded spec, {demo_pesq}')
             librosa.display.specshow(librosa.amplitude_to_db(raw_mag), cmap="magma", y_axis="linear", ax=axes[1], sr=self.hparams.sample_rate)
             axes[1].set_title('raw spec')
             plt.tight_layout()
