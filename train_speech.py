@@ -258,7 +258,7 @@ def dataio_prep(hparams):
     def audio_pipeline(path, segment):
         wav = sb.dataio.dataio.read_audio(path)
         if segment:
-            segment_size = hparams["segment_size"] * hparams["sample_rate"]
+            segment_size = int(hparams["segment_size"] * hparams["sample_rate"])
             if wav.size(0) > segment_size:
                 max_audio_start = wav.size(0) - segment_size
                 audio_start = torch.randint(0, max_audio_start, (1,))

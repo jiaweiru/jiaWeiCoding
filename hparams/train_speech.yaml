@@ -15,7 +15,7 @@ __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 data_folder: /home/sturjw/Datasets/LibriTTS
 json_folder: ./json
 
-output_folder: !ref ./results/speech/<seed>/ARN_mel_l1
+output_folder: !ref ./results/speech/<seed>/ARGAN_coder
 save_folder: !ref <output_folder>/save
 samples_folder: !ref <output_folder>/test_samples
 
@@ -31,7 +31,7 @@ train_subsets: ["train-clean-100", "train-clean-360"]
 valid_subsets: ["dev-clean"]
 test_subsets: ["test-clean"]
 skip_prep: False
-segment_size: 3
+segment_size: 0.5
 min_duration:
     train: 0
     valid: 0.6
@@ -63,14 +63,17 @@ win_type: hann
 train_dataloader_options:
     batch_size: !ref <batch_size>
     shuffle: True
+    num_workers: 8
 
 valid_dataloader_options:
     batch_size: 1
     shuffle: False
+    num_workers: 8
 
 test_dataloader_options:
     batch_size: 1
     shuffle: False
+    num_workers: 8
 
 compute_cost_recon: !name:models.magri_multimel_loss
     mel_dict:

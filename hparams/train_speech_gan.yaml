@@ -15,7 +15,7 @@ __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 data_folder: /home/sturjw/Datasets/LibriTTS
 json_folder: ./json
 
-output_folder: !ref ./results/speech/<seed>/ARN_GAN_finetune_2
+output_folder: !ref ./results/speech/<seed>/ARGAN_finetune
 save_folder: !ref <output_folder>/save
 samples_folder: !ref <output_folder>/test_samples
 
@@ -24,8 +24,8 @@ tensorboard_logs: !ref <output_folder>/tb_logs
 
 # Path where data manifest files will be stored
 # The data manifest files are created by the data preparation script.
-train_annotation: !ref <json_folder>/speech_train_0.5s.json
-valid_annotation: !ref <json_folder>/speech_valid_0.5s.json
+train_annotation: !ref <json_folder>/speech_train.json
+valid_annotation: !ref <json_folder>/speech_valid.json
 test_annotation: !ref <json_folder>/speech_test.json
 train_subsets: ["train-clean-100", "train-clean-360"]
 valid_subsets: ["dev-clean"]
@@ -45,12 +45,12 @@ tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
     save_dir: !ref <tensorboard_logs>
 
 # Training Parameters
-number_of_epochs: 100
+number_of_epochs: 400
 batch_size: 64
 max_grad_norm: 5.0
 
 fine_tune: True
-trained_generator: /home/sturjw/Code/jiaWeiCoding/results/speech/2234/ARN_mel_l1_RI/save/CKPT+2023-05-12+20-52-53+00/model.ckpt
+trained_generator: /home/sturjw/Code/jiaWeiCoding/results/speech/2234/ARN_mel_l1/save/CKPT+2023-05-07+22-30-13+00/model.ckpt
 
 # Test stage:
 # Visualize and save the first few audios
@@ -65,14 +65,17 @@ win_type: hann
 train_dataloader_options:
     batch_size: !ref <batch_size>
     shuffle: True
+    num_workers: 8
 
 valid_dataloader_options:
     batch_size: 1
     shuffle: False
+    num_workers: 8
 
 test_dataloader_options:
     batch_size: 1
     shuffle: False
+    num_workers: 8
 
 # adv train
 learning_rate_g: 0.00003
