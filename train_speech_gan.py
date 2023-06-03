@@ -190,9 +190,9 @@ class NCBrain(sb.Brain):
             """
             state_dict = torch.load(path, map_location=device)
             if self.distributed_launch:
-                state_dict = {'module.' + k: v for k, v in state_dict.items() if k[:7] != 'module.'}
+                state_dict = {'module.' + k if k[:7] != 'module.' else k: v for k, v in state_dict.items()}
             else:
-                state_dict = {k[7:]: v for k, v in state_dict.items() if k[:7] == 'module.'}
+                state_dict = {k[7:] if k[:7] == 'module.' else k: v for k, v in state_dict.items()}
             incompatible_keys = obj.load_state_dict(
                 state_dict, strict=False
             )

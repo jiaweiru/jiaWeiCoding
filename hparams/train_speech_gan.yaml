@@ -50,7 +50,7 @@ batch_size: 64
 max_grad_norm: 5.0
 
 fine_tune: True
-trained_generator: /home/sturjw/Code/jiaWeiCoding/results/speech/2234/ARN_mel_l1/save/CKPT+2023-05-07+22-30-13+00/model.ckpt
+trained_generator: /home/sturjw/Code/jiaWeiCoding/results/speech/2234/ARGAN_coder/save/CKPT+2023-06-02+22-32-40+00/model.ckpt
 
 # Test stage:
 # Visualize and save the first few audios
