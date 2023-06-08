@@ -43,7 +43,7 @@ def _read_exactly(fo, size):
 def read_header(fo, struct_format, identifier):
     header_bytes = _read_exactly(fo, struct_format.size)
     stream_head, idtf, meta_size = struct_format.unpack(header_bytes)
-    logger.debug("Reading header:", stream_head.decode('utf-8'))
+    logger.debug("Reading header:" + stream_head.decode('utf-8'))
     if idtf != identifier:
         logger.error("Incorrect identifier prevents decoding.")
         raise ValueError("Identifier error.")

@@ -1,0 +1,49 @@
+bit_per_codebook: 10
+suffix: .cccc
+sample_rate: 16000
+stream_head: jiaweizuishuai
+device: cpu
+ckpt_path: /home/sturjw/Code/jiaWeiCoding/results/speech/2234/ARGAN_finetune/save/CKPT+2023-06-08+16-27-58+00/generator.ckpt
+log_config_path: /home/sturjw/Code/jiaWeiCoding/hparams/log_config.yaml
+exp_dir: /home/sturjw/Code/jiaWeiCoding/Compress/speech
+
+identifier: jiaweiwudi
+input_path: 
+output_path: 
+mode: 
+
+audio_normalizer: !new:speechbrain.dataio.preprocess.AudioNormalizer
+    sample_rate: !ref <sample_rate>
+    mix: avg-to-mono
+
+win_length: 320
+hop_length: 160
+n_fft: 320
+win_type: hann
+
+model: !new:models.ARN
+    win_len: !ref <win_length>
+    win_inc: !ref <hop_length>
+    fft_len: !ref <n_fft>
+    win_type: !ref <win_type>
+    kernel_size: !tuple (5, 5, 5, 5)
+    kernel_stride: !tuple (1, 4, 4, 2)
+    kernel_num: !tuple (16, 32, 64, 120)
+    rnn_layers: 2
+    rnn_units: 64
+    rnn_type: LSTM
+    attn_layers: 2
+    n_heads: 8
+    groups: 6
+    bit_per_cbk: 10
+    comp_law: power-law
+    alpha: 0.5
+
+modules:
+    coder: !ref <model>
+
+pretrainer: !new:speechbrain.utils.parameter_transfer.Pretrainer
+    loadables:
+        coder: !ref <model>
+    paths:
+        coder: !ref <ckpt_path>
