@@ -143,7 +143,7 @@ def create_json(wav_list, json_file, sample_rate, min_duration):
             signal = signal.unsqueeze(0)
             resampled_signal = resampler(signal)
             os.unlink(wav_file)
-            torchaudio.save(wav_file, resampled_signal, sample_rate=sample_rate)
+            torchaudio.save(wav_file, resampled_signal, sample_rate=sample_rate, bits_per_sample=16)
 
         # Gets the speaker-id from the utterance-id
         spk_id = uttid.split("_")[0]

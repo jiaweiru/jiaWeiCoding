@@ -1,5 +1,8 @@
 json/
 results/
+Codectest/
+Compress/
+Streamlit/
 pretrained_results/
 pretrained_streamlit/
 /cccc.py

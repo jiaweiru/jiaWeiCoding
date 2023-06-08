@@ -224,18 +224,19 @@ class NCBrain(sb.Brain):
         after parameters are fully configured (e.g. DDP, jit).
         """
         if self.opt_class is not None:
-            opt_g_class, opt_d_class, sch_g_class, sch_d_class = self.opt_class
+            opt_g_class, opt_d_class = self.opt_class
+            # opt_g_class, opt_d_class, sch_g_class, sch_d_class = self.opt_class
             
             self.optimizer_g = opt_g_class(self.modules.generator.parameters())
             self.optimizer_d = opt_d_class(self.modules.discriminator.parameters())
-            self.scheduler_g = sch_g_class(self.optimizer_g)
-            self.scheduler_d = sch_d_class(self.optimizer_d)
+            # self.scheduler_g = sch_g_class(self.optimizer_g)
+            # self.scheduler_d = sch_d_class(self.optimizer_d)
 
             if self.checkpointer is not None:
                 self.checkpointer.add_recoverable("optimizer_g", self.optimizer_g)
                 self.checkpointer.add_recoverable("optimizer_d", self.optimizer_d)
-                self.checkpointer.add_recoverable("scheduler_g", self.scheduler_d)
-                self.checkpointer.add_recoverable("scheduler_d", self.scheduler_d)
+                # self.checkpointer.add_recoverable("scheduler_g", self.scheduler_d)
+                # self.checkpointer.add_recoverable("scheduler_d", self.scheduler_d)
     
     def on_stage_start(self, stage, epoch=None):
         """
@@ -278,8 +279,8 @@ class NCBrain(sb.Brain):
         if stage == sb.Stage.VALID:
                 
             # Update learning rate
-            self.scheduler_g.step()
-            self.scheduler_d.step()
+            # self.scheduler_g.step()
+            # self.scheduler_d.step()
             lr_g = self.optimizer_g.param_groups[-1]["lr"]
             lr_d = self.optimizer_d.param_groups[-1]["lr"]
 
@@ -432,8 +433,6 @@ if __name__ == "__main__":
         opt_class=[
             hparams["opt_class_generator"],
             hparams["opt_class_discriminator"],
-            hparams["sch_class_generator"],
-            hparams["sch_class_discriminator"],
         ],
         hparams=hparams,
         run_opts=run_opts,

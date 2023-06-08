@@ -85,11 +85,9 @@ class NCBrain(sb.Brain):
             self.loss_recon_metric.append(batch.id, predict_dict=predictions, lens=lens, reduction="batch")
             self.loss_commit_metric.append(batch.id, predict_dict=predictions, lens=lens, reduction="batch")
 
-        if stage != sb.Stage.TRAIN:
+        if (stage == sb.Stage.VALID and self.hparams.epoch_counter.current % self.hparams.valid_epochs == 0) or stage == sb.Stage.TEST:
             self.stoi_metric.append(batch.id, predictions["est_wav"].squeeze(dim=1), raw_wav.squeeze(dim=1), lens, reduction="batch")
-
-            if stage == sb.Stage.TEST:
-                self.pesq_metric.append(batch.id, predict=predictions["est_wav"].squeeze(dim=1), target=raw_wav.squeeze(dim=1), lengths=lens)
+            self.pesq_metric.append(batch.id, predict=predictions["est_wav"].squeeze(dim=1), target=raw_wav.squeeze(dim=1), lengths=lens)
 
         # Log and save in test stage.
         if stage == sb.Stage.TEST and self.step <= self.hparams.log_save:
@@ -147,15 +145,11 @@ class NCBrain(sb.Brain):
                 mode="wb",
             )
 
-        if stage != sb.Stage.TRAIN:
-            
+        if (stage == sb.Stage.VALID and epoch % self.hparams.valid_epochs == 0) or stage == sb.Stage.TEST:
             self.stoi_metric = sb.utils.metric_stats.MetricStats(metric=stoi_loss.stoi_loss)
-            
-            if stage == sb.Stage.TEST:
-                self.pesq_metric = sb.utils.metric_stats.MetricStats(
-                    metric=pesq_eval, n_jobs=self.hparams.pesq_n_jobs, batch_eval=False
-                )
-        
+            self.pesq_metric = sb.utils.metric_stats.MetricStats(
+                metric=pesq_eval, n_jobs=self.hparams.pesq_n_jobs, batch_eval=False
+            )
 
     def on_stage_end(self, stage, stage_loss, epoch=None):
         """
@@ -194,15 +188,28 @@ class NCBrain(sb.Brain):
             valid_stats = {
                 "loss_recon": self.loss_recon_metric.summarize("average"),
                 "loss_commit": self.loss_commit_metric.summarize("average"), 
-                "stoi": -self.stoi_metric.summarize("average")
             }
 
             valid_stats_tb = {
                 "loss_recon": self.loss_recon_metric.scores,
                 "loss_commit": self.loss_commit_metric.scores, 
-                "stoi": [-i for i in self.stoi_metric.scores]
             }
             
+            if epoch % self.hparams.valid_epochs == 0:
+                valid_stats = {
+                    "loss_recon": self.loss_recon_metric.summarize("average"),
+                    "loss_commit": self.loss_commit_metric.summarize("average"), 
+                    "stoi": -self.stoi_metric.summarize("average"),
+                    "pesq": self.pesq_metric.summarize("average")
+                    }
+
+                valid_stats_tb = {
+                    "loss_recon": self.loss_recon_metric.scores,
+                    "loss_commit": self.loss_commit_metric.scores, 
+                    "stoi": [-i for i in self.stoi_metric.scores],
+                    "pesq": self.pesq_metric.scores,
+                    }
+                
             # The train_logger writes a summary to stdout and to the logfile.
             self.hparams.train_logger.log_stats(
                 {"Epoch": epoch},
@@ -218,7 +225,7 @@ class NCBrain(sb.Brain):
 
             # Save the current checkpoint and delete previous checkpoints,
             # unless they have the current best pesq score.
-            self.checkpointer.save_and_keep_only(meta=valid_stats, max_keys=["stoi"])
+            self.checkpointer.save_and_keep_only(meta=valid_stats, max_keys=["loss_recon"])
 
         # We also write statistics about test data to stdout and to the logfile.
         if stage == sb.Stage.TEST:

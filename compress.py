@@ -125,7 +125,7 @@ class NeuralCoding(Pretrained):
             logger.info(f"Output dir {output_path} does not exist, mkidr {output_path}.")
             Path.mkdir(output_path, parents=True)
 
-        output_path = output_path.joinpath(input_path.stem + ".wav")
+        output_path = output_path.joinpath(input_path.stem + "_decoded" + ".wav")
         torchaudio.save(str(output_path), wav.cpu(), sample_rate=self.sample_rate, bits_per_sample=16)
 
     def audio2comp(self, audio):
@@ -204,11 +204,11 @@ class NeuralCoding(Pretrained):
 if __name__ == '__main__':
     
     # Reading command line arguments
-    hparams, overrides = sys.argv[1], sys.argv[2:]
+    hparams_file, overrides = sys.argv[1], sys.argv[2:]
     
-    with open(hparams) as fin:
+    with open(hparams_file) as fin:
         savedir = load_hyperpyyaml(fin)["exp_dir"]
-    source, filename = split_path(hparams)
+    source, filename = split_path(hparams_file)
     overrides = _convert_to_yaml(overrides)
     
     coder = NeuralCoding.from_hparams(source=source, hparams_file=filename, overrides=overrides, savedir=savedir, pymodule_file='') # set pymodule_file '' to avoid unnecessary symlink

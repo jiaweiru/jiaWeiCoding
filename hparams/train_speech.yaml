@@ -49,6 +49,7 @@ number_of_epochs: 300
 batch_size: 64
 learning_rate: 0.0003
 max_grad_norm: 5.0
+valid_epochs: 20
 
 # Test stage:
 # Visualize and save the first few audios
