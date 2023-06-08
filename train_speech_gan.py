@@ -11,7 +11,7 @@ from pesq import pesq
 from speechbrain.nnet.loss import stoi_loss
 from speechbrain.utils.data_utils import scalarize
 from hyperpyyaml import load_hyperpyyaml
-from utills import prepare_libritts
+from datasets import prepare_libritts
 
 
 plt.switch_backend('agg')

@@ -2,9 +2,15 @@ bit_per_codebook: 10
 suffix: .cccc
 sample_rate: 44100
 stream_head: jiaweizuishuai
-identifier: jiaweiwudi
 device: cpu
-ckpt_path: /home/sturjw/Code/jiaWeiCoding/results/speech/2234/ARGAN_finetune/save/CKPT+2023-06-05+13-00-08+00/generator.ckpt
+ckpt_path: /home/sturjw/Code/jiaWeiCoding/results/audio/4234/ARN_853K_baseline/save/CKPT+2023-04-21+14-49-43+00/model.ckpt
+log_config_path: /home/sturjw/Code/jiaWeiCoding/hparams/log_config.yaml
+exp_dir: /home/sturjw/Code/jiaWeiCoding/Compress/audio
+
+identifier: jiaweiwudi
+input_path: 
+output_path: 
+mode: 
 
 win_length: 1764
 hop_length: 441
