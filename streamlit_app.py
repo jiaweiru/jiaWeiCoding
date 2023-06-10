@@ -9,8 +9,6 @@ from matplotlib import pyplot as plt
 plt.switch_backend('agg')
 
 
-SAMPLE_RATE = 44100
-
 @st.cache_resource
 def load_coder(source='/home/sturjw/Code/jiaWeiCoding/hparams',
                hparams='compress_speech.yaml',
@@ -19,7 +17,7 @@ def load_coder(source='/home/sturjw/Code/jiaWeiCoding/hparams',
     return NeuralCoding.from_hparams(source=source, hparams_file=hparams, savedir=save_dir, pymodule_file='')
 
 @st.cache_data
-def compress(file, coder):
+def compress(file):
     
     audio, sr = torchaudio.load(file, channels_first=False)
     audio = coder.audio_normalizer(audio, sr).unsqueeze(0).to(coder.device)
@@ -28,7 +26,7 @@ def compress(file, coder):
     return comp
 
 @st.cache_data
-def decompress(file, coder):
+def decompress(file):
     
     compressed = file.getvalue()
     audio_rec = coder.comp2audio(compressed)
@@ -75,7 +73,7 @@ if __name__ == '__main__':
     if audio_file is not None:
         
         col1.write("Audio is being compressed, please wait. :bicyclist:")
-        comp = compress(audio_file, coder)
+        comp = compress(audio_file)
         col1.write("Done! :star2:")
         col1.success('Success Compress!', icon="✅")
         col1.download_button("Download compressed file", comp, "mycomp.cccc")
@@ -83,7 +81,7 @@ if __name__ == '__main__':
     if comp_file is not None:
         
         col2.write("File is being decompressed, please wait. :bicyclist:")
-        wav_io = decompress(comp_file, coder)
+        wav_io = decompress(comp_file)
         col2.write("Done! :star2:")
         col2.success('Success Decompress!', icon="✅")
         col2.download_button("Download decompressed audio file", wav_io, "decoded.wav", "audio/wav")
