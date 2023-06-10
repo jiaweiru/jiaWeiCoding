@@ -19,7 +19,7 @@ def load_coder(source='/home/sturjw/Code/jiaWeiCoding/hparams',
     return NeuralCoding.from_hparams(source=source, hparams_file=hparams, savedir=save_dir, pymodule_file='')
 
 @st.cache_data
-def compress(file):
+def compress(file, coder):
     
     audio, sr = torchaudio.load(file, channels_first=False)
     audio = coder.audio_normalizer(audio, sr).unsqueeze(0).to(coder.device)
@@ -28,12 +28,12 @@ def compress(file):
     return comp
 
 @st.cache_data
-def decompress(file):
+def decompress(file, coder):
     
     compressed = file.getvalue()
     audio_rec = coder.comp2audio(compressed)
     fo = io.BytesIO()
-    torchaudio.save(fo, audio_rec.cpu(), SAMPLE_RATE, format='wav', bits_per_sample=16)
+    torchaudio.save(fo, audio_rec.cpu(), coder.sample_rate, format='wav', bits_per_sample=16)
     
     return fo
     
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     if audio_file is not None:
         
         col1.write("Audio is being compressed, please wait. :bicyclist:")
-        comp = compress(audio_file)
+        comp = compress(audio_file, coder)
         col1.write("Done! :star2:")
         col1.success('Success Compress!', icon="✅")
         col1.download_button("Download compressed file", comp, "mycomp.cccc")
@@ -83,7 +83,7 @@ if __name__ == '__main__':
     if comp_file is not None:
         
         col2.write("File is being decompressed, please wait. :bicyclist:")
-        wav_io = decompress(comp_file)
+        wav_io = decompress(comp_file, coder)
         col2.write("Done! :star2:")
         col2.success('Success Decompress!', icon="✅")
         col2.download_button("Download decompressed audio file", wav_io, "decoded.wav", "audio/wav")
