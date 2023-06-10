@@ -3,7 +3,7 @@ suffix: .cccc
 sample_rate: 16000
 stream_head: jiaweizuishuai
 device: cpu
-ckpt_path: /home/sturjw/Code/jiaWeiCoding/2023-6-9.ckpt
+ckpt_path: /home/sturjw/Code/jiaWeiCoding/generator.ckpt
 log_config_path: /home/sturjw/Code/jiaWeiCoding/hparams/log_config.yaml
 exp_dir: /home/sturjw/Code/jiaWeiCoding/Compress/speech
 

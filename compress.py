@@ -132,7 +132,8 @@ class NeuralCoding(Pretrained):
         
         with torch.no_grad():
             # A list of [B, T,], len of the list is the number of the codebooks.
-            indices_list = self.mods.coder.encode(audio)
+            indices_list = self.mods.coder.encode(torch.nn.functional.pad(
+                audio, (0, self.hparams.hop_length - (audio.shape[1] % self.hparams.hop_length)), "constant"))
             # Reshape to [B, T, K]
             indices = torch.stack(indices_list, dim=-1)
         
@@ -145,6 +146,7 @@ class NeuralCoding(Pretrained):
             # 'm': self.mods.coder.__class__.__name__,   # model name
             'nf': indices.shape[1],                   # the number of frames
             'nc': indices.shape[2],                   # num_codebooks
+            'ns': audio.shape[1]
         }
         write_header(fo, metadata, self.header_struct, self.stream_head, self.identifier)
 
@@ -168,6 +170,7 @@ class NeuralCoding(Pretrained):
         # model_name = meta_data['m']
         num_frames = meta_data['nf']
         num_cbks = meta_data['nc']
+        num_samples = meta_data['ns']
 
         # Read audio data indices for decode.
         indices_list = []
@@ -183,6 +186,7 @@ class NeuralCoding(Pretrained):
             indices_list = torch.tensor(indices_list, dtype=torch.long, device=self.device).unsqueeze(0)
             indices_list = [indices_list[:, :, i] for i in range(num_cbks)]
             wav = self.mods.coder.decode(indices_list).squeeze(0)
+            wav = wav[:, :num_samples]
         
         return wav
     

@@ -13,7 +13,7 @@ SAMPLE_RATE = 44100
 
 @st.cache_resource
 def load_coder(source='/home/sturjw/Code/jiaWeiCoding/hparams',
-               hparams='compress.yaml',
+               hparams='compress_speech.yaml',
                save_dir='./streamlit'):
     
     return NeuralCoding.from_hparams(source=source, hparams_file=hparams, savedir=save_dir, pymodule_file='')

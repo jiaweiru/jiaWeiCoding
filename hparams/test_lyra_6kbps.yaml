@@ -5,10 +5,9 @@ test_json: /home/sturjw/Code/jiaWeiCoding/json/speech_test.json
 data_folder: /home/sturjw/Datasets/LibriTTS
 
 suffix: .lyra
-encode_dir: !ref <exp_dir>/lossy_files
+encode_dir: !ref <exp_dir>/encoded_files
 decode_dir: !ref <exp_dir>/decoded_files
-# encode_sh: python /home/sturjw/Code/jiaWeiCoding/compress.py hparams/compress_speech.yaml --input_path {input} --output_path {output} --mode comp
-# decode_sh: python /home/sturjw/Code/jiaWeiCoding/compress.py hparams/compress_speech.yaml --input_path {input} --output_path {output} --mode decomp
+raw_dir: !ref <exp_dir>/raw_files
 encode_sh: cd /home/sturjw/Code/lyra ; ./bazel-bin/lyra/cli_example/encoder_main --input_path {input} --output_dir {output} --bitrate 6000
 decode_sh: cd /home/sturjw/Code/lyra ; ./bazel-bin/lyra/cli_example/decoder_main --encoded_path {input} --output_dir {output} --bitrate 6000
 

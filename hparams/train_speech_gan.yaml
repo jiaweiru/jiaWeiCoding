@@ -48,9 +48,10 @@ tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
 number_of_epochs: 300
 batch_size: 64
 max_grad_norm: 5.0
+valid_epochs: 5
 
 fine_tune: True
-trained_generator: /home/sturjw/Code/jiaWeiCoding/results/speech/2234/ARGAN_coder/save/CKPT+2023-06-02+22-32-40+00/model.ckpt
+trained_generator: /home/sturjw/Code/jiaWeiCoding/results/speech/2234/ARGAN_coder/save/CKPT+2023-06-10+16-04-19+00/model.ckpt
 
 # Test stage:
 # Visualize and save the first few audios

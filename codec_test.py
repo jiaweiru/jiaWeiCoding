@@ -41,6 +41,9 @@ class CodecTest():
         if not os.path.isdir(self.hparams.exp_dir):
             os.makedirs(self.hparams.exp_dir)
             
+        if not os.path.isdir(self.hparams.raw_dir):
+            os.makedirs(self.hparams.raw_dir)
+            
         self.setup_logging(self.hparams.log_config_path)
         
         self.audio_list = self.path_from_json()
@@ -85,26 +88,28 @@ class CodecTest():
                     {"input": os.path.join(self.hparams.encode_dir, os.path.splitext(os.path.basename(path))[0] + self.hparams.suffix), 
                      "output": self.hparams.decode_dir}
                     ))
-                encode_completed = subprocess.run(encode_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-                decode_completed = subprocess.run(decode_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                encode_handle = subprocess.run(encode_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                decode_handle = subprocess.run(decode_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 
                 decoded_path = os.path.join(self.hparams.decode_dir, os.path.splitext(os.path.basename(path))[0] + "_decoded" + os.path.splitext(os.path.basename(path))[1])
                 
-                raw, _ = sf.read(path)
+                raw, sr = sf.read(path)
                 degraded, _ = sf.read(decoded_path)
+                sf.write(os.path.join(self.hparams.raw_dir, os.path.basename(path)), raw, sr)
                 
                 pesq_score = pesq_eval(degraded, raw)
                 pesq += pesq_score
                 pesq_avg = pesq / num
                 
                 visqol_cmd = (self.hparams.visqol_sh.format_map({"path": path, "decoded_path": decoded_path}))
-                visqol_completed = subprocess.run(visqol_cmd, shell=True,
+                visqol_handle = subprocess.run(visqol_cmd, shell=True,
                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 # parse stdout to get the current float value
-                visqol_score = float(visqol_completed.stdout.decode("utf-8").split("\t")[-1].replace("\n", ""))
+                visqol_score = float(visqol_handle.stdout.decode("utf-8").split("\t")[-1].replace("\n", ""))
                 visqol += visqol_score
                 visqol_avg = visqol / num
                 
+                logger.debug(f"File name:{os.path.basename(path)}, PESQ-WB:{pesq_score}, VISQOL:{visqol_score}")
                 t.set_postfix(pesq_avg=pesq_avg, visqol_avg=visqol_avg)
                 
         logger.info(f"Test completed, pesq:{pesq_avg}, visqol:{visqol_avg}")
