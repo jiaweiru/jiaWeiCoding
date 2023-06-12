@@ -1,6 +1,7 @@
 import streamlit as st
 
 import io
+import os
 import torchaudio
 
 from compress import NeuralCoding
@@ -76,7 +77,7 @@ if __name__ == '__main__':
         comp = compress(audio_file)
         col1.write("Done! :star2:")
         col1.success('Success Compress!', icon="✅")
-        col1.download_button("Download compressed file", comp, "mycomp.cccc")
+        col1.download_button("Download compressed file", comp, os.path.splitext(audio_file.name)[0] + ".cccc")
         
     if comp_file is not None:
         
@@ -84,4 +85,4 @@ if __name__ == '__main__':
         wav_io = decompress(comp_file)
         col2.write("Done! :star2:")
         col2.success('Success Decompress!', icon="✅")
-        col2.download_button("Download decompressed audio file", wav_io, "decoded.wav", "audio/wav")
+        col2.download_button("Download decompressed audio file", wav_io, os.path.splitext(comp_file.name)[0] + "decoded.wav", "audio/wav")

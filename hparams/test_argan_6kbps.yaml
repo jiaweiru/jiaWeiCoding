@@ -1,8 +1,8 @@
 log_config_path: /home/sturjw/Code/jiaWeiCoding/hparams/log_config.yaml
-exp_dir: /home/sturjw/Code/jiaWeiCoding/Codectest/ARGAN_test
+exp_dir: /home/sturjw/Code/jiaWeiCoding/Codectest/ARGAN_test_NTT
 
-test_json: /home/sturjw/Code/jiaWeiCoding/json/speech_test.json
-data_folder: /home/sturjw/Datasets/LibriTTS
+test_json: /home/sturjw/Code/jiaWeiCoding/json/NTT_test.json
+data_folder: /home/sturjw/Datasets/NTT/TRACK1_4_wav
 
 suffix: .cccc
 encode_dir: !ref <exp_dir>/encoded_files
@@ -12,3 +12,5 @@ encode_sh: python /home/sturjw/Code/jiaWeiCoding/compress.py hparams/compress_sp
 decode_sh: python /home/sturjw/Code/jiaWeiCoding/compress.py hparams/compress_speech.yaml --input_path {input} --output_path {output} --mode decomp
 
 visqol_sh: cd /home/sturjw/Code/visqol ; ./bazel-bin/visqol --reference_file {path} --degraded_file {decoded_path} --use_speech_mode
+
+# When testing different datasets, change exp_dir, test_json and data_folder.

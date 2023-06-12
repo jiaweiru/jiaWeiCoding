@@ -1,8 +1,8 @@
 log_config_path: /home/sturjw/Code/jiaWeiCoding/hparams/log_config.yaml
-exp_dir: /home/sturjw/Code/jiaWeiCoding/Codectest/Lyra_test
+exp_dir: /home/sturjw/Code/jiaWeiCoding/Codectest/Lyra_test_NTT
 
-test_json: /home/sturjw/Code/jiaWeiCoding/json/speech_test.json
-data_folder: /home/sturjw/Datasets/LibriTTS
+test_json: /home/sturjw/Code/jiaWeiCoding/json/NTT_test.json
+data_folder: /home/sturjw/Datasets/NTT/TRACK1_4_wav
 
 suffix: .lyra
 encode_dir: !ref <exp_dir>/encoded_files
@@ -12,3 +12,5 @@ encode_sh: cd /home/sturjw/Code/lyra ; ./bazel-bin/lyra/cli_example/encoder_main
 decode_sh: cd /home/sturjw/Code/lyra ; ./bazel-bin/lyra/cli_example/decoder_main --encoded_path {input} --output_dir {output} --bitrate 6000
 
 visqol_sh: cd /home/sturjw/Code/visqol ; ./bazel-bin/visqol --reference_file {path} --degraded_file {decoded_path} --use_speech_mode
+
+# When testing different datasets, change exp_dir, test_json and data_folder.
