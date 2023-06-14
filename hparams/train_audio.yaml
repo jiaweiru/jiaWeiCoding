@@ -29,7 +29,7 @@ valid_annotation: !ref <json_folder>/audio_valid.json
 test_annotation: !ref <json_folder>/audio_test.json
 split_ratio: [80, 10, 10]
 audio_type: mixture
-segment: 3
+segment: 0.5
 mono_type: avg
 
 # The train logger writes training statistics to a file, as well as stdout.
@@ -72,7 +72,20 @@ test_dataloader_options:
     shuffle: False
     num_workers: 8
 
-compute_cost_recon: !name:models.magri_loss
+compute_cost_recon: !name:models.magri_multimel_loss
+    mel_dict:
+        sample_rate: 44100
+        n_mels: 64
+        f_min: 0
+        f_max: 22050
+        power: 1
+        norm: "slaney"
+        mel_scale: "slaney"
+        normalized: False
+    level: (6, 11)
+    cost_magri: 1.0
+    cost_multimel: 1.0
+    mel_tp: l1
 compute_cost_commit: !name:models.commit_loss
     cost: 0.1
 

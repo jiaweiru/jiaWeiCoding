@@ -313,9 +313,7 @@ class NCBrain(sb.Brain):
                     valid_stats=valid_stats_tb,
                 )
             
-            # Save the current checkpoint and delete previous checkpoints,
-            # unless they have the current best pesq score.
-            self.checkpointer.save_and_keep_only()
+                self.checkpointer.save_checkpoint()
 
         # We also write statistics about test data to stdout and to the logfile.
         if stage == sb.Stage.TEST:
