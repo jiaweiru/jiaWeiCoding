@@ -15,7 +15,7 @@ __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 data_folder: /home/sturjw/Datasets/LibriTTS
 json_folder: ./json
 
-output_folder: !ref ./results/speech/<seed>/ARGAN_finetune
+output_folder: !ref ./results/speech/<seed>/ARGAN_finetune_l1magri
 save_folder: !ref <output_folder>/save
 samples_folder: !ref <output_folder>/test_samples
 
@@ -132,6 +132,7 @@ mel_dict:
 stft_loss: null
 commit_loss: !new:models.CommitLoss
 magri_loss: !new:models.MagRILoss
+  loss_tp: l1
 mseg_loss: !new:speechbrain.lobes.models.HifiGAN.MSEGLoss
 feat_match_loss: !new:speechbrain.lobes.models.HifiGAN.MelganFeatureLoss
 multimel_loss: !new:models.MultiScaleMelLoss

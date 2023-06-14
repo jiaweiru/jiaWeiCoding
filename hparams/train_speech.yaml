@@ -15,7 +15,7 @@ __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 data_folder: /home/sturjw/Datasets/LibriTTS
 json_folder: ./json
 
-output_folder: !ref ./results/speech/<seed>/ARGAN_coder_wo_magri
+output_folder: !ref ./results/speech/<seed>/ARGAN_coder_l1magri
 save_folder: !ref <output_folder>/save
 samples_folder: !ref <output_folder>/test_samples
 
@@ -87,8 +87,9 @@ compute_cost_recon: !name:models.magri_multimel_loss
         mel_scale: "slaney"
         normalized: False
     level: (6, 11)
-    cost_magri: 0
+    cost_magri: 1.0
     cost_multimel: 1.0
+    magri_tp: l1
     mel_tp: l1
 compute_cost_commit: !name:models.commit_loss
     cost: 0.1

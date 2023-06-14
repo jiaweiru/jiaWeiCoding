@@ -6,7 +6,7 @@ from torchaudio import transforms
 from speechbrain.nnet.losses import mse_loss, l1_loss
 
 
-def magri_loss(predict_dict, lens=None, reduction="mean"):
+def magri_loss(predict_dict, magri_tp='l2', lens=None, reduction="mean"):
     """
     Compute MagRI loss between compressed predict and target spec.
 
@@ -22,11 +22,19 @@ def magri_loss(predict_dict, lens=None, reduction="mean"):
     # the number of freq bins 
     bins = predict_mag.shape[2]
 
-    loss_mag = mse_loss(predict_mag, target_mag, length=lens, reduction=reduction)
-    loss_ri = mse_loss(predict_spec[:, :, :bins], target_spec[:, :, :bins], length=lens, reduction=reduction) \
-            + mse_loss(predict_spec[:, :, bins:], target_spec[:, :, bins:], length=lens, reduction=reduction)
+    if magri_tp == 'l2':
+        loss_mag = mse_loss(predict_mag, target_mag, length=lens, reduction=reduction)
+        loss_ri = mse_loss(predict_spec[:, :, :bins], target_spec[:, :, :bins], length=lens, reduction=reduction) \
+                + mse_loss(predict_spec[:, :, bins:], target_spec[:, :, bins:], length=lens, reduction=reduction)
+        
+        return loss_mag + loss_ri
     
-    return loss_mag + loss_ri
+    elif magri_tp == 'l1':
+        loss_mag = l1_loss(predict_mag, target_mag, length=lens, reduction=reduction)
+        loss_ri = l1_loss(predict_spec[:, :, :bins], target_spec[:, :, :bins], length=lens, reduction=reduction) \
+                + l1_loss(predict_spec[:, :, bins:], target_spec[:, :, bins:], length=lens, reduction=reduction)
+        
+        return loss_mag + loss_ri
 
 def ri_loss(predict_dict, lens=None, reduction="mean"):
     """
@@ -171,11 +179,11 @@ def multimel_loss(mel_dict, level, predict_dict, loss_tp, lens=None, reduction="
     return total_loss
 
 
-def magri_multimel_loss(mel_dict, level, predict_dict, cost_magri, cost_multimel, mel_tp='l2', lens=None, reduction="mean"):
+def magri_multimel_loss(mel_dict, level, predict_dict, cost_magri, cost_multimel, magri_tp='l2', mel_tp='l2', lens=None, reduction="mean"):
     """
     MagRI + MultiMel Loss
     """
-    loss_magri = magri_loss(predict_dict, lens, reduction)
+    loss_magri = magri_loss(predict_dict, magri_tp, lens, reduction)
     loss_multimel = multimel_loss(mel_dict, level, predict_dict, mel_tp, lens, reduction)
     
     return loss_magri * cost_magri + loss_multimel * cost_multimel
@@ -204,9 +212,12 @@ class CommitLoss(nn.Module):
     
 class MagRILoss(nn.Module):
     
-    def __init__(self):
+    def __init__(self, loss_tp='l2'):
         super().__init__()
-        self.loss_func = nn.MSELoss()
+        if loss_tp == 'l2':
+            self.loss_func = nn.MSELoss()
+        elif loss_tp == 'l1':
+            self.loss_func = nn.L1Loss()
     
     def forward(self, mag, mag_hat, ri, ri_hat):
         loss_mag = self.loss_func(mag, mag_hat)
