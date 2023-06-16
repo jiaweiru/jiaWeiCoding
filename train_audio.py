@@ -314,7 +314,7 @@ if __name__ == "__main__":
             'save_json_train':hparams["train_annotation"],
             'save_json_valid':hparams["valid_annotation"],
             'save_json_test':hparams["test_annotation"],
-            'split_ratio':hparams["split_ratio"],
+            'split':hparams["split"],
             'audio_type':hparams["audio_type"]
         },
     )

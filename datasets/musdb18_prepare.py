@@ -8,6 +8,30 @@ import torchaudio
 
 logger = logging.getLogger(__name__)
 MUSDB18_URL = "https://zenodo.org/record/3338373/files/musdb18hq.zip?download=1"
+TEST_SPECIFIED = [
+    "Al James - Schoolboy Facination",
+    "Angels In Amplifiers - I'm Alright",
+    "BKS - Bulldozer",
+    "Bobby Nobody - Stitch Up",
+    "Buitraker - Revo X",
+    "Forkupines - Semantics",
+    "PR - Happy Daze",
+    "The Easton Ellises (Baumi) - SDRNR",
+    "Tom McKenzie - Directions",
+    "We Fell From The Sky - Not You"
+]
+VALID_SPECIFIED = [
+    "Louis Cressy Band - Good Time",
+    "Lyndsey Ollard - Catching Up",
+    "M.E.R.C. Music - Knockout",
+    "Moosmusic - Big Dummy Shake",
+    "Motor Tapes - Shore",
+    "Mu - Too Bright",
+    "Nerve 9 - Pray For The Rain",
+    "PR - Oh No",
+    "Secretariat - Over The Top",
+    "Side Effects Project - Sing With Me"
+]
 
 
 def prepare_musdb18(
@@ -15,7 +39,7 @@ def prepare_musdb18(
     save_json_train,
     save_json_valid,
     save_json_test,
-    split_ratio=None,
+    split=None,
     audio_type='mixture',
     samples_per_track=64
 ):
@@ -33,10 +57,11 @@ def prepare_musdb18(
         Path where the validation data specification file will be saved.
     save_json_test : str
         Path where the test data specification file will be saved.
-    split_ratio : list
+    split : list or str
         List composed of three integers that sets split ratios for train, valid,
-        and test sets, respectively. For instance split_ratio=[80, 10, 10] will
+        and test sets, respectively. For instance split=[80, 10, 10] will
         assign 80% of the tricks to training, 10% for validation and 10% for test.
+        "specified" for valid set and test set
     audio_type : str
         Select which types of audio training in the dataset to use, with the
         options of 'mixture', 'drums', 'vocals', 'other', 'bass' and 'all'.
@@ -91,8 +116,8 @@ def prepare_musdb18(
     )
 
     # Random split the signal list into train, valid, and test sets.
-    if split_ratio:
-        data_split = split_sets(track_list, split_ratio)
+    if split:
+        data_split = split_sets(track_list, split)
     else:
         data_split = split_sets(track_list, [100, 50], shuffle=False)
         
@@ -172,33 +197,40 @@ def skip(*filenames):
             return False
     return True
 
-
-def split_sets(track_list, split_ratio, shuffle=True):
+def split_sets(track_list, split, shuffle=True):
     """Randomly splits the track list into training, validation, and test lists.
     Arguments
     ---------
     track_list : list
         list of all the tracks in the dataset
-    split_ratio: list
+    split: list or str
         List composed of three integers that sets split ratios for train, valid,
-        and test sets, respectively. For instance split_ratio=[80, 10, 10] will
+        and test sets, respectively. For instance split=[80, 10, 10] will
         assign 80% of the sentences to training, 10% for validation, and 10%
         for test.
+        "specified" for specified valid set and test set.
     Returns
     ------
     dictionary containing train, valid, and test splits.
     """
+    if split == "specified":
+        data_split = {
+            "valid": [t for t in track_list if os.path.basename(t) in VALID_SPECIFIED],
+            "test": [t for t in track_list if os.path.basename(t) in TEST_SPECIFIED],
+            "train": [t for t in track_list if os.path.basename(t) not in VALID_SPECIFIED + TEST_SPECIFIED]
+            }
+        return data_split
     # Random shuffles the list
     if shuffle:
         random.shuffle(track_list)
         
-    tot_split = sum(split_ratio)
+    tot_split = sum(split)
     tot_snts = len(track_list)
     data_split = {}
     splits = ["train", "valid"]
 
     for i, split in enumerate(splits):
-        n_snts = int(tot_snts * split_ratio[i] / tot_split)
+        n_snts = int(tot_snts * split[i] / tot_split)
         data_split[split] = track_list[0: n_snts]
         del track_list[0: n_snts]
     data_split["test"] = track_list
