@@ -6,16 +6,17 @@ import torchaudio
 
 from compress import NeuralCoding
 from matplotlib import pyplot as plt
+from hyperpyyaml import load_hyperpyyaml
 
 plt.switch_backend('agg')
 
 
 @st.cache_resource
 def load_coder(source='/home/sturjw/Code/jiaWeiCoding/hparams',
-               hparams='compress_speech.yaml',
-               save_dir='./Streamlit'):
-    
-    return NeuralCoding.from_hparams(source=source, hparams_file=hparams, savedir=save_dir, pymodule_file='')
+               hparams='compress_speech.yaml'):
+    with open(os.path.join(source, hparams)) as fin:
+        savedir = load_hyperpyyaml(fin)["exp_dir"]
+    return NeuralCoding.from_hparams(source=source, hparams_file=hparams, savedir=savedir, pymodule_file='')
 
 @st.cache_data
 def compress(file):
