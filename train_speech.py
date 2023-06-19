@@ -197,6 +197,7 @@ class NCBrain(sb.Brain):
             # unless they have the current best pesq score.
             self.checkpointer.save_and_keep_only(meta=self.valid_stats, max_keys=["pesq"])
             
+        if stage == sb.Stage.TRAIN:
             # The train_logger writes a summary to stdout and to the logfile.
             self.hparams.train_logger.log_stats(
                 {"Epoch": epoch},
