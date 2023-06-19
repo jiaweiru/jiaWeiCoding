@@ -12,10 +12,10 @@ __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 # 4- Set data_folder with the local path.
 # Reading data from the local disk of the compute node (e.g. $SLURM_TMPDIR with SLURM-based clusters) is very important.
 # It allows you to read the data much faster without slowing down the shared filesystem.
-data_folder: /home/sturjw/Datasets/LibriTTS
+data_folder: /home/sturjw/Datasets/VCTK
 json_folder: ./json
 
-output_folder: !ref ./results/speech/<seed>/ARGAN_coder_l1magri
+output_folder: !ref ./results/speech/<seed>/ARGAN_coder_VCTK
 save_folder: !ref <output_folder>/save
 samples_folder: !ref <output_folder>/test_samples
 
@@ -24,18 +24,33 @@ tensorboard_logs: !ref <output_folder>/tb_logs
 
 # Path where data manifest files will be stored
 # The data manifest files are created by the data preparation script.
-train_annotation: !ref <json_folder>/speech_train.json
-valid_annotation: !ref <json_folder>/speech_valid.json
-test_annotation: !ref <json_folder>/speech_test.json
-train_subsets: ["train-clean-100", "train-clean-360"]
-valid_subsets: ["dev-clean"]
-test_subsets: ["test-clean"]
+
+# dataset: LibriTTS
+# train_annotation: !ref <json_folder>/speech_train_libritts.json
+# valid_annotation: !ref <json_folder>/speech_valid_libritts.json
+# test_annotation: !ref <json_folder>/speech_test_libritts.json
+# train_subsets: ["train-clean-100", "train-clean-360"]
+# valid_subsets: ["dev-clean"]
+# test_subsets: ["test-clean"]
+# skip_prep: False
+# segment_size: 0.5
+# min_duration:
+#     train: 0
+#     valid: 1.5
+#     test: 1.5
+
+dataset: VCTK
+train_annotation: !ref <json_folder>/speech_train_vctk.json
+valid_annotation: !ref <json_folder>/speech_valid_vctk.json
+test_annotation: !ref <json_folder>/speech_test_vctk.json
 skip_prep: False
 segment_size: 0.5
 min_duration:
     train: 0
-    valid: 1.5
-    test: 1.5
+    valid: 0
+    test: 0
+mic_id:
+  - mic1
 
 # The train logger writes training statistics to a file, as well as stdout.
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger

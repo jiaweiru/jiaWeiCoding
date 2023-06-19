@@ -13,7 +13,7 @@ plt.switch_backend('agg')
 
 @st.cache_resource
 def load_coder(source='/home/sturjw/Code/jiaWeiCoding/hparams',
-               hparams='compress_speech.yaml'):
+               hparams='compress_audio.yaml'):
     with open(os.path.join(source, hparams)) as fin:
         savedir = load_hyperpyyaml(fin)["exp_dir"]
     return NeuralCoding.from_hparams(source=source, hparams_file=hparams, savedir=savedir, pymodule_file='')

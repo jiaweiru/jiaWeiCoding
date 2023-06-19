@@ -3,7 +3,7 @@ suffix: .cccc
 sample_rate: 44100
 stream_head: jiaweizuishuai
 device: cpu
-ckpt_path: /home/sturjw/Code/jiaWeiCoding/results/audio/4234/ARN_853K_baseline/save/CKPT+2023-04-21+14-49-43+00/model.ckpt
+ckpt_path: /home/sturjw/Code/jiaWeiCoding/results/audio/4234/ARN_853K_SamsungSet_24kbps/save/CKPT+2023-06-18+17-55-50+00/model.ckpt
 log_config_path: /home/sturjw/Code/jiaWeiCoding/hparams/log_config.yaml
 exp_dir: /home/sturjw/Code/jiaWeiCoding/Compress/audio
 
@@ -34,7 +34,7 @@ model: !new:models.ARN
     rnn_type: LSTM
     attn_layers: 2
     n_heads: 8
-    groups: 48
+    groups: 24
     bit_per_cbk: 10
     comp_law: power-law
     alpha: 0.5

@@ -11,7 +11,7 @@ from pesq import pesq
 from speechbrain.nnet.loss import stoi_loss
 from speechbrain.utils.data_utils import scalarize
 from hyperpyyaml import load_hyperpyyaml
-from datasets import prepare_libritts
+from datasets import prepare_libritts, prepare_vctk
 
 
 plt.switch_backend('agg')
@@ -404,20 +404,34 @@ if __name__ == "__main__":
 
     # Data preparation, to be run on only one process.
     if not hparams["skip_prep"]:
-        sb.utils.distributed.run_on_main(
-            prepare_libritts,
-            kwargs={
-                'data_folder':hparams["data_folder"],
-                'save_json_train':hparams["train_annotation"],
-                'save_json_valid':hparams["valid_annotation"],
-                'save_json_test':hparams["test_annotation"],
-                "sample_rate": hparams["sample_rate"],
-                "train_subsets": hparams["train_subsets"],
-                "valid_subsets": hparams["valid_subsets"],
-                "test_subsets": hparams["test_subsets"],
-                "min_duration": hparams["min_duration"]
-            },
-        )
+        if hparams["dataset"] == "LibriTTS":
+            sb.utils.distributed.run_on_main(
+                prepare_libritts,
+                kwargs={
+                    'data_folder':hparams["data_folder"],
+                    'save_json_train':hparams["train_annotation"],
+                    'save_json_valid':hparams["valid_annotation"],
+                    'save_json_test':hparams["test_annotation"],
+                    "sample_rate": hparams["sample_rate"],
+                    "train_subsets": hparams["train_subsets"],
+                    "valid_subsets": hparams["valid_subsets"],
+                    "test_subsets": hparams["test_subsets"],
+                    "min_duration": hparams["min_duration"]
+                },
+            )
+        elif hparams["dataset"] == "VCTK":
+            sb.utils.distributed.run_on_main(
+                prepare_vctk,
+                kwargs={
+                    'data_folder':hparams["data_folder"],
+                    'save_json_train':hparams["train_annotation"],
+                    'save_json_valid':hparams["valid_annotation"],
+                    'save_json_test':hparams["test_annotation"],
+                    "sample_rate": hparams["sample_rate"],
+                    "mic_id": hparams["mic_id"],
+                    "min_duration": hparams["min_duration"]
+                },
+            )
         
 
     # Create dataset objects "train" and "valid"

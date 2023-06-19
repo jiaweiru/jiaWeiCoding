@@ -1,10 +1,10 @@
-from speechbrain.utils.data_utils import get_all_files, download_file
-import json
 import os
+import json
 import shutil
 import random
 import logging
 import torchaudio
+from speechbrain.utils.data_utils import get_all_files, download_file
 
 logger = logging.getLogger(__name__)
 MUSDB18_URL = "https://zenodo.org/record/3338373/files/musdb18hq.zip?download=1"
@@ -61,7 +61,7 @@ def prepare_musdb18(
         List composed of three integers that sets split ratios for train, valid,
         and test sets, respectively. For instance split=[80, 10, 10] will
         assign 80% of the tricks to training, 10% for validation and 10% for test.
-        "specified" for valid set and test set
+        "specified" for valid set and test set.
     audio_type : str
         Select which types of audio training in the dataset to use, with the
         options of 'mixture', 'drums', 'vocals', 'other', 'bass' and 'all'.
@@ -115,7 +115,7 @@ def prepare_musdb18(
         f"Creating {save_json_train}, {save_json_valid}, and {save_json_test}"
     )
 
-    # Random split the signal list into train, valid, and test sets.
+    # Random or specified split the signal list into train, valid, and test sets.
     if split:
         data_split = split_sets(track_list, split)
     else:
@@ -220,6 +220,7 @@ def split_sets(track_list, split, shuffle=True):
             "train": [t for t in track_list if os.path.basename(t) not in VALID_SPECIFIED + TEST_SPECIFIED]
             }
         return data_split
+    
     # Random shuffles the list
     if shuffle:
         random.shuffle(track_list)
@@ -229,9 +230,9 @@ def split_sets(track_list, split, shuffle=True):
     data_split = {}
     splits = ["train", "valid"]
 
-    for i, split in enumerate(splits):
+    for i, set in enumerate(splits):
         n_snts = int(tot_snts * split[i] / tot_split)
-        data_split[split] = track_list[0: n_snts]
+        data_split[set] = track_list[0: n_snts]
         del track_list[0: n_snts]
     data_split["test"] = track_list
 
