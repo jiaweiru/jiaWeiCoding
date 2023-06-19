@@ -15,7 +15,7 @@ __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 data_folder: /home/sturjw/Datasets/MUSDB18-HQ
 json_folder: ./json
 
-output_folder: !ref ./results/audio/<seed>/ARN_853K_SamsungSet_12kbps
+output_folder: !ref ./results/audio/<seed>/ARN_853K_SamsungSet_48kbps
 save_folder: !ref <output_folder>/save
 samples_folder: !ref <output_folder>/test_samples
 
@@ -55,7 +55,7 @@ max_grad_norm: 5.0
 
 # Test stage:
 # Visualize and save the first few audios
-log_save: 5
+log_save: 10
 
 train_dataloader_options:
     batch_size: !ref <batch_size>
@@ -102,7 +102,7 @@ model: !new:models.ARN
     rnn_type: LSTM
     attn_layers: 2
     n_heads: 8
-    groups: 12
+    groups: 48
     bit_per_cbk: 10
     comp_law: power-law
     alpha: 0.5
