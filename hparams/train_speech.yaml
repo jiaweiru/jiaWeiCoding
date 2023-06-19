@@ -12,10 +12,10 @@ __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 # 4- Set data_folder with the local path.
 # Reading data from the local disk of the compute node (e.g. $SLURM_TMPDIR with SLURM-based clusters) is very important.
 # It allows you to read the data much faster without slowing down the shared filesystem.
-data_folder: /home/sturjw/Datasets/LibriTTS
+data_folder: /home/sturjw/Datasets/VCTK
 json_folder: ./json
 
-output_folder: !ref ./results/speech/<seed>/ARGAN_coder_LibriTTS
+output_folder: !ref ./results/speech/<seed>/ARGAN_coder_VCTK
 save_folder: !ref <output_folder>/save
 samples_folder: !ref <output_folder>/test_samples
 
@@ -25,32 +25,32 @@ tensorboard_logs: !ref <output_folder>/tb_logs
 # Path where data manifest files will be stored
 # The data manifest files are created by the data preparation script.
 
-dataset: LibriTTS
-train_annotation: !ref <json_folder>/speech_train_libritts.json
-valid_annotation: !ref <json_folder>/speech_valid_libritts.json
-test_annotation: !ref <json_folder>/speech_test_libritts.json
-train_subsets: ["train-clean-100", "train-clean-360"]
-valid_subsets: ["dev-clean"]
-test_subsets: ["test-clean"]
-skip_prep: False
-segment_size: 0.5
-min_duration:
-    train: 0
-    valid: 1.5
-    test: 1.5
-
-# dataset: VCTK
-# train_annotation: !ref <json_folder>/speech_train_vctk.json
-# valid_annotation: !ref <json_folder>/speech_valid_vctk.json
-# test_annotation: !ref <json_folder>/speech_test_vctk.json
+# dataset: LibriTTS
+# train_annotation: !ref <json_folder>/speech_train_libritts.json
+# valid_annotation: !ref <json_folder>/speech_valid_libritts.json
+# test_annotation: !ref <json_folder>/speech_test_libritts.json
+# train_subsets: ["train-clean-100", "train-clean-360"]
+# valid_subsets: ["dev-clean"]
+# test_subsets: ["test-clean"]
 # skip_prep: False
 # segment_size: 0.5
 # min_duration:
 #     train: 0
-#     valid: 0
-#     test: 0
-# mic_id:
-#   - mic1
+#     valid: 1.5
+#     test: 1.5
+
+dataset: VCTK
+train_annotation: !ref <json_folder>/speech_train_vctk.json
+valid_annotation: !ref <json_folder>/speech_valid_vctk.json
+test_annotation: !ref <json_folder>/speech_test_vctk.json
+skip_prep: False
+segment_size: 0.5
+min_duration:
+    train: 0
+    valid: 0
+    test: 0
+mic_id:
+  - mic1
 
 # The train logger writes training statistics to a file, as well as stdout.
 train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
@@ -60,11 +60,11 @@ tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
     save_dir: !ref <tensorboard_logs>
 
 # Training Parameters
-number_of_epochs: 300
-batch_size: 64
+number_of_epochs: 1200
+batch_size: 128
 learning_rate: 0.0003
 max_grad_norm: 5.0
-valid_epochs: 20
+valid_epochs: 30
 
 # Test stage:
 # Visualize and save the first few audios
@@ -114,9 +114,9 @@ model: !new:models.ARN
     win_inc: !ref <hop_length>
     fft_len: !ref <n_fft>
     win_type: !ref <win_type>
-    kernel_size: !tuple (7, 7, 7, 7)
+    kernel_size: !tuple (5, 5, 5, 5)
     kernel_stride: !tuple (1, 4, 4, 2)
-    kernel_num: !tuple (16, 32, 64, 96)
+    kernel_num: !tuple (16, 32, 64, 120)
     rnn_layers: 2
     rnn_units: 64
     rnn_type: LSTM
