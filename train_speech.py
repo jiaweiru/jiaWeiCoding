@@ -175,9 +175,17 @@ class NCBrain(sb.Brain):
                 "loss_recon": self.loss_recon_metric.scores,
                 "loss_commit": self.loss_commit_metric.scores
             }
-            self.valid_stats = {}
-            self.valid_stats_tb = {}
             # Summarize the statistics from the stage for record-keeping.
+            
+            self.hparams.train_logger.log_stats(
+                {"Epoch": epoch},
+                train_stats=self.train_stats,
+            )
+
+            self.hparams.tensorboard_train_logger.log_stats(
+                {"Epoch": epoch}, 
+                train_stats=self.train_stats_tb,
+            )
 
         if stage == sb.Stage.VALID:
             self.valid_stats = {
@@ -193,23 +201,20 @@ class NCBrain(sb.Brain):
                 "stoi": [-i for i in self.stoi_metric.scores],
                 "pesq": self.pesq_metric.scores,
             }
-            # Save the current checkpoint and delete previous checkpoints,
-            # unless they have the current best pesq score.
-            self.checkpointer.save_and_keep_only(meta=self.valid_stats, max_keys=["pesq"])
             
-        if stage == sb.Stage.TRAIN:
-            # The train_logger writes a summary to stdout and to the logfile.
             self.hparams.train_logger.log_stats(
                 {"Epoch": epoch},
-                train_stats=self.train_stats,
                 valid_stats=self.valid_stats,
             )
 
             self.hparams.tensorboard_train_logger.log_stats(
                 {"Epoch": epoch}, 
-                train_stats=self.train_stats_tb,
                 valid_stats=self.valid_stats_tb,
             )
+            
+            # Save the current checkpoint and delete previous checkpoints,
+            # unless they have the current best pesq score.
+            self.checkpointer.save_and_keep_only(meta=self.valid_stats, max_keys=["pesq"])
 
         # We also write statistics about test data to stdout and to the logfile.
         if stage == sb.Stage.TEST:
