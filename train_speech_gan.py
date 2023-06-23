@@ -314,6 +314,8 @@ class NCBrain(sb.Brain):
                 )
             
                 self.checkpointer.save_checkpoint()
+                # TODO: use save_and_keep to save recent ckpts
+                #       reload _fit_valid to train faster, like train_speech.py
 
         # We also write statistics about test data to stdout and to the logfile.
         if stage == sb.Stage.TEST:
