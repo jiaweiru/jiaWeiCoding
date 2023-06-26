@@ -90,6 +90,8 @@ class CodecTest():
                     ))
                 encode_handle = subprocess.run(encode_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 decode_handle = subprocess.run(decode_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                # print(encode_handle.stdout)
+                # print(decode_handle.stdout)
                 
                 decoded_path = os.path.join(self.hparams.decode_dir, os.path.splitext(os.path.basename(path))[0] + "_decoded" + os.path.splitext(os.path.basename(path))[1])
                 

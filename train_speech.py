@@ -83,7 +83,7 @@ class NCBrain(sb.Brain):
         # Test stage: stoi and pesq
         self.loss_recon_metric.append(batch.id, predict_dict=predictions, lens=lens, reduction="batch")
         self.loss_commit_metric.append(batch.id, predict_dict=predictions, lens=lens, reduction="batch")
-        if stage != sb.Stage.TRAIN:
+        if (stage == sb.Stage.VALID and self.hparams.epoch_counter.current % self.hparams.valid_epochs == 0) or stage == sb.Stage.TEST:
             self.stoi_metric.append(batch.id, predictions["est_wav"].squeeze(dim=1), raw_wav.squeeze(dim=1), lens, reduction="batch")
             self.pesq_metric.append(batch.id, predict=predictions["est_wav"].squeeze(dim=1), target=raw_wav.squeeze(dim=1), lengths=lens)
 
@@ -141,7 +141,7 @@ class NCBrain(sb.Brain):
                 mode="wb",
             )
 
-        if stage != sb.Stage.TRAIN:
+        if (stage == sb.Stage.VALID and self.hparams.epoch_counter.current % self.hparams.valid_epochs == 0) or stage == sb.Stage.TEST:
             self.stoi_metric = sb.utils.metric_stats.MetricStats(metric=stoi_loss.stoi_loss)
             self.pesq_metric = sb.utils.metric_stats.MetricStats(
                 metric=pesq_eval, n_jobs=self.hparams.pesq_n_jobs, batch_eval=False
@@ -159,13 +159,6 @@ class NCBrain(sb.Brain):
 
         # At the end of epoch, we can write stats and checkpoints
         if stage == sb.Stage.TRAIN:
-                
-            if self.hparams.sched:
-                current_lr, next_lr = self.hparams.lr_scheduler(
-                    [self.optimizer], epoch, stage_loss
-                )
-                sb.nnet.schedulers.update_learning_rate(self.optimizer, next_lr)
-        
             # Define the train's stats as attributes to be counted at the valid stage.
             self.train_stats = {
                 "loss_recon": self.loss_recon_metric.summarize("average"),
@@ -175,63 +168,70 @@ class NCBrain(sb.Brain):
                 "loss_recon": self.loss_recon_metric.scores,
                 "loss_commit": self.loss_commit_metric.scores
             }
-            # Summarize the statistics from the stage for record-keeping.
+
+        if stage == sb.Stage.VALID:
+            
+            if self.hparams.sched:
+                current_lr, next_lr = self.hparams.lr_scheduler(
+                    [self.optimizer], epoch, stage_loss
+                )
+                sb.nnet.schedulers.update_learning_rate(self.optimizer, next_lr)
+        
+            if epoch % self.hparams.valid_epochs == 0:
+                self.valid_stats = {
+                    "loss_recon": self.loss_recon_metric.summarize("average"),
+                    "loss_commit": self.loss_commit_metric.summarize("average"), 
+                    "stoi": -self.stoi_metric.summarize("average"),
+                    "pesq": self.pesq_metric.summarize("average")
+                }
+
+                self.valid_stats_tb = {
+                    "loss_recon": self.loss_recon_metric.scores,
+                    "loss_commit": self.loss_commit_metric.scores, 
+                    "stoi": [-i for i in self.stoi_metric.scores],
+                    "pesq": self.pesq_metric.scores,
+                }
+            else:
+                self.valid_stats = {
+                    "loss_recon": self.loss_recon_metric.summarize("average"),
+                    "loss_commit": self.loss_commit_metric.summarize("average")
+                }
+
+                self.valid_stats_tb = {
+                    "loss_recon": self.loss_recon_metric.scores,
+                    "loss_commit": self.loss_commit_metric.scores
+                }
             
             self.hparams.train_logger.log_stats(
                 {"Epoch": epoch},
                 train_stats=self.train_stats,
-            )
-
-            self.hparams.tensorboard_train_logger.log_stats(
-                {"Epoch": epoch}, 
-                train_stats=self.train_stats_tb,
-            )
-
-        if stage == sb.Stage.VALID:
-            self.valid_stats = {
-                "loss_recon": self.loss_recon_metric.summarize("average"),
-                "loss_commit": self.loss_commit_metric.summarize("average"), 
-                "stoi": -self.stoi_metric.summarize("average"),
-                "pesq": self.pesq_metric.summarize("average")
-            }
-
-            self.valid_stats_tb = {
-                "loss_recon": self.loss_recon_metric.scores,
-                "loss_commit": self.loss_commit_metric.scores, 
-                "stoi": [-i for i in self.stoi_metric.scores],
-                "pesq": self.pesq_metric.scores,
-            }
-            
-            self.hparams.train_logger.log_stats(
-                {"Epoch": epoch},
                 valid_stats=self.valid_stats,
             )
 
             self.hparams.tensorboard_train_logger.log_stats(
                 {"Epoch": epoch}, 
+                train_stats=self.train_stats_tb,
                 valid_stats=self.valid_stats_tb,
             )
             
             # Save the current checkpoint and delete previous checkpoints,
             # unless they have the current best pesq score.
-            self.checkpointer.save_and_keep_only(meta=self.valid_stats, max_keys=["pesq"])
+            self.checkpointer.save_and_keep_only(meta=self.valid_stats, min_keys=["loss_recon"])
 
         # We also write statistics about test data to stdout and to the logfile.
         if stage == sb.Stage.TEST:
 
-            self.test_stats = {
+            test_stats = {
+                "loss_recon": self.loss_recon_metric.summarize("average"),
+                "loss_commit": self.loss_commit_metric.summarize("average"), 
                 "pesq": self.pesq_metric.summarize("average"),
                 "stoi": -self.stoi_metric.summarize("average")
             }
 
             self.hparams.train_logger.log_stats(
                 {"Epoch loaded": self.hparams.epoch_counter.current},
-                test_stats=self.test_stats,
+                test_stats=test_stats,
             )
-    
-    def _fit_valid(self, valid_set, epoch, enable):
-        if epoch % self.hparams.valid_epochs == 0:
-            super()._fit_valid(valid_set, epoch, enable)
     
 
 def dataio_prep(hparams):
@@ -361,6 +361,6 @@ if __name__ == "__main__":
     # Load best checkpoint (highest SISNR) for evaluation
     test_stats = nc_brain.evaluate(
         test_set=datasets["test"],
-        max_key="stoi",
+        max_key="pesq",
         test_loader_kwargs=hparams["test_dataloader_options"],
     )

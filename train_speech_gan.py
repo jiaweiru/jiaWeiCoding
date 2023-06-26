@@ -292,12 +292,12 @@ class NCBrain(sb.Brain):
                 valid_stats=self.last_loss_stats[sb.Stage.VALID],
             )
             if epoch % self.hparams.valid_epochs == 0:
-                valid_stats = {
+                self.valid_stats = {
                     "stoi": -self.stoi_metric.summarize("average"),
                     "pesq": self.pesq_metric.summarize("average")
                 }
 
-                valid_stats_tb = {
+                self.valid_stats_tb = {
                     "stoi": [-i for i in self.stoi_metric.scores],
                     "pesq": self.pesq_metric.scores
                 }
@@ -305,17 +305,15 @@ class NCBrain(sb.Brain):
                 # The train_logger writes a summary to stdout and to the logfile.
                 self.hparams.train_logger.log_stats(
                     {"Epoch": epoch},
-                    valid_stats=valid_stats,
+                    valid_stats=self.valid_stats,
                 )
 
                 self.hparams.tensorboard_train_logger.log_stats(
                     {"Epoch": epoch}, 
-                    valid_stats=valid_stats_tb,
+                    valid_stats=self.valid_stats_tb,
                 )
             
-                self.checkpointer.save_checkpoint()
-                # TODO: use save_and_keep to save recent ckpts
-                #       reload _fit_valid to train faster, like train_speech.py
+                self.checkpointer.save_and_keep_only(meta=self.valid_stats, num_to_keep=3)
 
         # We also write statistics about test data to stdout and to the logfile.
         if stage == sb.Stage.TEST:

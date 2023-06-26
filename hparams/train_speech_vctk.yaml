@@ -1,0 +1,145 @@
+# Seed needs to be set at top of yaml, before objects with parameters are made
+seed: 2234
+__set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
+
+# Set up folders for reading from and writing to
+# Dataset will be downloaded to the `data_folder`
+# If you plan to train a system on an HPC cluster with a big dataset,
+# we strongly suggest doing the following:
+# 1- Compress the dataset in a single tar or zip file.
+# 2- Copy your dataset locally (i.e., the local disk of the computing node).
+# 3- Uncompress the dataset in the local folder.
+# 4- Set data_folder with the local path.
+# Reading data from the local disk of the compute node (e.g. $SLURM_TMPDIR with SLURM-based clusters) is very important.
+# It allows you to read the data much faster without slowing down the shared filesystem.
+data_folder: /home/sturjw/Datasets/VCTK
+json_folder: ./json
+
+output_folder: !ref ./results/speech/<seed>/ARGAN_coder_VCTK
+save_folder: !ref <output_folder>/save
+samples_folder: !ref <output_folder>/test_samples
+
+train_log: !ref <output_folder>/train_log.txt
+tensorboard_logs: !ref <output_folder>/tb_logs
+
+# Path where data manifest files will be stored
+# The data manifest files are created by the data preparation script.
+
+dataset: VCTK
+train_annotation: !ref <json_folder>/speech_train_vctk.json
+valid_annotation: !ref <json_folder>/speech_valid_vctk.json
+test_annotation: !ref <json_folder>/speech_test_vctk.json
+skip_prep: False
+segment_size: 0.5
+min_duration:
+    train: 0
+    valid: 0
+    test: 0
+mic_id:
+  - mic1
+
+# The train logger writes training statistics to a file, as well as stdout.
+train_logger: !new:speechbrain.utils.train_logger.FileTrainLogger
+    save_file: !ref <train_log>
+
+tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
+    save_dir: !ref <tensorboard_logs>
+
+# Training Parameters
+number_of_epochs: 1000
+batch_size: 64
+learning_rate: 0.0003
+max_grad_norm: 5.0
+valid_epochs: 50
+
+# Test stage:
+# Visualize and save the first few audios
+sample_rate: 16000
+log_save: 5
+pesq_n_jobs: 24 # Number of jobs to compute metrics (increase it for a speed up)
+win_length: 320
+hop_length: 160
+n_fft: 320
+win_type: hann
+
+train_dataloader_options:
+    batch_size: !ref <batch_size>
+    shuffle: True
+    num_workers: 8
+
+valid_dataloader_options:
+    batch_size: 1
+    shuffle: False
+    num_workers: 8
+
+test_dataloader_options:
+    batch_size: 1
+    shuffle: False
+    num_workers: 8
+
+compute_cost_recon: !name:models.magri_multimel_loss
+    mel_dict:
+        sample_rate: 16000
+        n_mels: 64
+        f_min: 0
+        f_max: 8000
+        power: 1
+        norm: "slaney"
+        mel_scale: "slaney"
+        normalized: False
+    level: (6, 11)
+    cost_magri: 1.0
+    magri_tp: l2
+    cost_multimel: 1.0
+    mel_tp: l1
+compute_cost_commit: !name:models.commit_loss
+    cost: 0.1
+
+model: !new:models.ARN
+    win_len: !ref <win_length>
+    win_inc: !ref <hop_length>
+    fft_len: !ref <n_fft>
+    win_type: !ref <win_type>
+    kernel_size: !tuple (5, 5, 5, 5)
+    kernel_stride: !tuple (1, 4, 4, 2)
+    kernel_num: !tuple (16, 32, 64, 120)
+    rnn_layers: 2
+    rnn_units: 64
+    rnn_type: LSTM
+    attn_layers: 2
+    n_heads: 8
+    groups: 6
+    bit_per_cbk: 10
+    comp_law: power-law
+    alpha: 0.5
+
+# The first object passed to the Brain class is this "Epoch Counter"
+# which is saved by the Checkpointer so that training can be resumed
+# if it gets interrupted at any point.
+epoch_counter: !new:speechbrain.utils.epoch_loop.EpochCounter
+    limit: !ref <number_of_epochs>
+
+# Objects in "modules" dict will have their parameters moved to the correct
+# device, as well as having train()/eval() called on them by the Brain class.
+modules:
+    model: !ref <model>
+
+# This optimizer will be constructed by the Brain class after all parameters
+# are moved to the correct device. Then it will be added to the checkpointer.
+opt_class: !name:torch.optim.Adam
+    lr: !ref <learning_rate>
+
+sched: False
+lr_scheduler: !new:speechbrain.nnet.schedulers.ReduceLROnPlateau
+    factor: 0.8
+    patience: 3
+    dont_halve_until_epoch: 50
+
+# This object is used for saving the state of training both so that it
+# can be resumed if it gets interrupted, and also so that the best checkpoint
+# can be later loaded for evaluation or inference.
+checkpointer: !new:speechbrain.utils.checkpoints.Checkpointer
+    checkpoints_dir: !ref <save_folder>
+    recoverables:
+        model: !ref <model>
+        counter: !ref <epoch_counter>

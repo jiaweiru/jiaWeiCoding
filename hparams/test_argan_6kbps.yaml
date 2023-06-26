@@ -1,8 +1,8 @@
 log_config_path: /home/sturjw/Code/jiaWeiCoding/hparams/log_config.yaml
-exp_dir: /home/sturjw/Code/jiaWeiCoding/Codectest/ARGAN_test_LibriTTS_train_on_VCTK_240epoch
+exp_dir: /home/sturjw/Code/jiaWeiCoding/Codectest/ARGAN_test_NTT_train_on_VCTK
 
-test_json: /home/sturjw/Code/jiaWeiCoding/json/speech_ss_test_libritts.json
-data_folder: /home/sturjw/Datasets/LibriTTS
+test_json: /home/sturjw/Code/jiaWeiCoding/json/NTT_test.json
+data_folder: /home/sturjw/Datasets/NTT/TRACK1_4_wav
 
 suffix: .cccc
 encode_dir: !ref <exp_dir>/encoded_files
