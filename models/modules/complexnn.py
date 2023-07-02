@@ -3,18 +3,24 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .attention import MultiHeadAttentionEncoder
 
+
 class ComplexMHA(nn.Module):
     """
     Adapt MHA to complex network,
     """
+
     def __init__(self, d_model, d_ff, n_heads, is_pe):
         super(ComplexMHA, self).__init__()
         self.d_model = d_model
         self.d_ff = d_ff
         self.n_heads = n_heads
         self.is_pe = is_pe
-        self.r_MHA = MultiHeadAttentionEncoder(self.d_model // 2, self.d_ff // 2, self.n_heads, self.is_pe)
-        self.i_MHA = MultiHeadAttentionEncoder(self.d_model // 2, self.d_ff // 2, self.n_heads, self.is_pe)
+        self.r_MHA = MultiHeadAttentionEncoder(
+            self.d_model // 2, self.d_ff // 2, self.n_heads, self.is_pe
+        )
+        self.i_MHA = MultiHeadAttentionEncoder(
+            self.d_model // 2, self.d_ff // 2, self.n_heads, self.is_pe
+        )
 
     def forward(self, x):
         real, imag = torch.chunk(x, 2, dim=1)
@@ -36,7 +42,6 @@ class ComplexMHA(nn.Module):
 
 
 class cPReLU(nn.Module):
-
     def __init__(self, complex_axis=1):
         super(cPReLU, self).__init__()
         self.r_prelu = nn.PReLU()
@@ -51,23 +56,44 @@ class cPReLU(nn.Module):
 
 
 class NaiveComplexGRU(nn.Module):
-    def __init__(self, input_size, hidden_size, projection_dim=None, bidirectional=False, batch_first=False):
+    def __init__(
+        self,
+        input_size,
+        hidden_size,
+        projection_dim=None,
+        bidirectional=False,
+        batch_first=False,
+    ):
         super(NaiveComplexGRU, self).__init__()
 
         self.input_dim = input_size // 2
         self.rnn_units = hidden_size // 2
-        self.real_lstm = nn.GRU(self.input_dim, self.rnn_units, num_layers=1, bidirectional=bidirectional,
-                                batch_first=False)
-        self.imag_lstm = nn.GRU(self.input_dim, self.rnn_units, num_layers=1, bidirectional=bidirectional,
-                                batch_first=False)
+        self.real_lstm = nn.GRU(
+            self.input_dim,
+            self.rnn_units,
+            num_layers=1,
+            bidirectional=bidirectional,
+            batch_first=False,
+        )
+        self.imag_lstm = nn.GRU(
+            self.input_dim,
+            self.rnn_units,
+            num_layers=1,
+            bidirectional=bidirectional,
+            batch_first=False,
+        )
         if bidirectional:
             bidirectional = 2
         else:
             bidirectional = 1
         if projection_dim is not None:
             self.projection_dim = projection_dim // 2
-            self.r_trans = nn.Linear(self.rnn_units * bidirectional, self.projection_dim)
-            self.i_trans = nn.Linear(self.rnn_units * bidirectional, self.projection_dim)
+            self.r_trans = nn.Linear(
+                self.rnn_units * bidirectional, self.projection_dim
+            )
+            self.i_trans = nn.Linear(
+                self.rnn_units * bidirectional, self.projection_dim
+            )
         else:
             self.projection_dim = None
 
@@ -90,23 +116,44 @@ class NaiveComplexGRU(nn.Module):
 
 
 class NaiveComplexLSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, projection_dim=None, bidirectional=False, batch_first=False):
+    def __init__(
+        self,
+        input_size,
+        hidden_size,
+        projection_dim=None,
+        bidirectional=False,
+        batch_first=False,
+    ):
         super(NaiveComplexLSTM, self).__init__()
 
         self.input_dim = input_size // 2
         self.rnn_units = hidden_size // 2
-        self.real_lstm = nn.LSTM(self.input_dim, self.rnn_units, num_layers=1, bidirectional=bidirectional,
-                                 batch_first=False)
-        self.imag_lstm = nn.LSTM(self.input_dim, self.rnn_units, num_layers=1, bidirectional=bidirectional,
-                                 batch_first=False)
+        self.real_lstm = nn.LSTM(
+            self.input_dim,
+            self.rnn_units,
+            num_layers=1,
+            bidirectional=bidirectional,
+            batch_first=False,
+        )
+        self.imag_lstm = nn.LSTM(
+            self.input_dim,
+            self.rnn_units,
+            num_layers=1,
+            bidirectional=bidirectional,
+            batch_first=False,
+        )
         if bidirectional:
             bidirectional = 2
         else:
             bidirectional = 1
         if projection_dim is not None:
             self.projection_dim = projection_dim // 2
-            self.r_trans = nn.Linear(self.rnn_units * bidirectional, self.projection_dim)
-            self.i_trans = nn.Linear(self.rnn_units * bidirectional, self.projection_dim)
+            self.r_trans = nn.Linear(
+                self.rnn_units * bidirectional, self.projection_dim
+            )
+            self.i_trans = nn.Linear(
+                self.rnn_units * bidirectional, self.projection_dim
+            )
         else:
             self.projection_dim = None
 
@@ -135,25 +182,25 @@ class NaiveComplexLSTM(nn.Module):
 
 class ComplexConv2d(nn.Module):
     def __init__(
-            self,
-            in_channels,
-            out_channels,
-            kernel_size=(1, 1),
-            stride=(1, 1),
-            padding=(0, 0),
-            dilation=1,
-            groups=1,
-            causal=True,
-            complex_axis=1,
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=(1, 1),
+        stride=(1, 1),
+        padding=(0, 0),
+        dilation=1,
+        groups=1,
+        causal=True,
+        complex_axis=1,
     ):
-        '''
-            in_channels: real+imag
-            out_channels: real+imag
-            kernel_size : input [B,C,D,T] kernel size in [D,T]
-            padding : input [B,C,D,T] padding in [D,T]
-            causal: if causal, will padding time dimension's left side,
-                    otherwise both
-        '''
+        """
+        in_channels: real+imag
+        out_channels: real+imag
+        kernel_size : input [B,C,D,T] kernel size in [D,T]
+        padding : input [B,C,D,T] padding in [D,T]
+        causal: if causal, will padding time dimension's left side,
+                otherwise both
+        """
         super(ComplexConv2d, self).__init__()
         self.in_channels = in_channels // 2
         self.out_channels = out_channels // 2
@@ -164,15 +211,29 @@ class ComplexConv2d(nn.Module):
         self.groups = groups
         self.dilation = dilation
         self.complex_axis = complex_axis
-        self.real_conv = nn.Conv2d(self.in_channels, self.out_channels, kernel_size, self.stride,
-                                   padding=[self.padding[0], 0], dilation=self.dilation, groups=self.groups)
-        self.imag_conv = nn.Conv2d(self.in_channels, self.out_channels, kernel_size, self.stride,
-                                   padding=[self.padding[0], 0], dilation=self.dilation, groups=self.groups)
+        self.real_conv = nn.Conv2d(
+            self.in_channels,
+            self.out_channels,
+            kernel_size,
+            self.stride,
+            padding=[self.padding[0], 0],
+            dilation=self.dilation,
+            groups=self.groups,
+        )
+        self.imag_conv = nn.Conv2d(
+            self.in_channels,
+            self.out_channels,
+            kernel_size,
+            self.stride,
+            padding=[self.padding[0], 0],
+            dilation=self.dilation,
+            groups=self.groups,
+        )
 
         nn.init.normal_(self.real_conv.weight.data, std=0.05)
         nn.init.normal_(self.imag_conv.weight.data, std=0.05)
-        nn.init.constant_(self.real_conv.bias, 0.)
-        nn.init.constant_(self.imag_conv.bias, 0.)
+        nn.init.constant_(self.real_conv.bias, 0.0)
+        nn.init.constant_(self.imag_conv.bias, 0.0)
 
     def forward(self, inputs):
         # if causal padding the back side, else two sides
@@ -191,8 +252,12 @@ class ComplexConv2d(nn.Module):
             if isinstance(inputs, torch.Tensor):
                 real, imag = torch.chunk(inputs, 2, self.complex_axis)
 
-            real2real = self.real_conv(real, )
-            imag2imag = self.imag_conv(imag, )
+            real2real = self.real_conv(
+                real,
+            )
+            imag2imag = self.imag_conv(
+                imag,
+            )
 
             real2imag = self.imag_conv(real)
             imag2real = self.real_conv(imag)
@@ -205,23 +270,22 @@ class ComplexConv2d(nn.Module):
 
 
 class ComplexConvTranspose2d(nn.Module):
-
     def __init__(
-            self,
-            in_channels,
-            out_channels,
-            kernel_size=(1, 1),
-            stride=(1, 1),
-            padding=(0, 0),
-            output_padding=(0, 0),
-            causal=False,
-            complex_axis=1,
-            groups=1
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=(1, 1),
+        stride=(1, 1),
+        padding=(0, 0),
+        output_padding=(0, 0),
+        causal=False,
+        complex_axis=1,
+        groups=1,
     ):
-        '''
-            in_channels: real+imag
-            out_channels: real+imag
-        '''
+        """
+        in_channels: real+imag
+        out_channels: real+imag
+        """
         super(ComplexConvTranspose2d, self).__init__()
         self.in_channels = in_channels // 2
         self.out_channels = out_channels // 2
@@ -231,19 +295,32 @@ class ComplexConvTranspose2d(nn.Module):
         self.output_padding = output_padding
         self.groups = groups
 
-        self.real_conv = nn.ConvTranspose2d(self.in_channels, self.out_channels, kernel_size, self.stride,
-                                            padding=self.padding, output_padding=output_padding, groups=self.groups)
-        self.imag_conv = nn.ConvTranspose2d(self.in_channels, self.out_channels, kernel_size, self.stride,
-                                            padding=self.padding, output_padding=output_padding, groups=self.groups)
+        self.real_conv = nn.ConvTranspose2d(
+            self.in_channels,
+            self.out_channels,
+            kernel_size,
+            self.stride,
+            padding=self.padding,
+            output_padding=output_padding,
+            groups=self.groups,
+        )
+        self.imag_conv = nn.ConvTranspose2d(
+            self.in_channels,
+            self.out_channels,
+            kernel_size,
+            self.stride,
+            padding=self.padding,
+            output_padding=output_padding,
+            groups=self.groups,
+        )
         self.complex_axis = complex_axis
 
         nn.init.normal_(self.real_conv.weight, std=0.05)
         nn.init.normal_(self.imag_conv.weight, std=0.05)
-        nn.init.constant_(self.real_conv.bias, 0.)
-        nn.init.constant_(self.imag_conv.bias, 0.)
+        nn.init.constant_(self.real_conv.bias, 0.0)
+        nn.init.constant_(self.imag_conv.bias, 0.0)
 
     def forward(self, inputs):
-
         if isinstance(inputs, torch.Tensor):
             real, imag = torch.chunk(inputs, 2, self.complex_axis)
         elif isinstance(inputs, tuple) or isinstance(inputs, list):
@@ -259,8 +336,12 @@ class ComplexConvTranspose2d(nn.Module):
             if isinstance(inputs, torch.Tensor):
                 real, imag = torch.chunk(inputs, 2, self.complex_axis)
 
-            real2real = self.real_conv(real, )
-            imag2imag = self.imag_conv(imag, )
+            real2real = self.real_conv(
+                real,
+            )
+            imag2imag = self.imag_conv(
+                imag,
+            )
 
             real2imag = self.imag_conv(real)
             imag2real = self.real_conv(imag)
@@ -280,7 +361,7 @@ class NaiveComplexBatchNorm2d(nn.Module):
 
     def forward(self, x):
         batch, channels, f, t = x.size()
-        real = self.bn_re(x[:, :channels // 2, :, :])
-        imag = self.bn_im(x[:, channels // 2:, :, :])
+        real = self.bn_re(x[:, : channels // 2, :, :])
+        imag = self.bn_im(x[:, channels // 2 :, :, :])
         output = torch.cat((real, imag), dim=1)
         return output

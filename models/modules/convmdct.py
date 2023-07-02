@@ -8,7 +8,7 @@ from scipy.signal.windows import kaiser
 def mdct_basis_(N):
     n0 = ((N // 2) + 1) / 2
     idx = np.arange(0, N, 1).reshape(N, 1)
-    kn = np.multiply(idx + n0, (idx[:(N // 2), :] + 0.5).T)
+    kn = np.multiply(idx + n0, (idx[: (N // 2), :] + 0.5).T)
     basis = np.cos((2 * np.pi / N) * kn)
     return torch.FloatTensor(basis.T)
 
@@ -23,7 +23,9 @@ def kbd_window_(win_len, filt_len, alpha=4):
         pad = 0
 
     window = np.concatenate([window, window[::-1]])
-    window = np.pad(window, (np.ceil(pad).astype(int), np.floor(pad).astype(int)), mode='constant')
+    window = np.pad(
+        window, (np.ceil(pad).astype(int), np.floor(pad).astype(int)), mode="constant"
+    )
     return torch.FloatTensor(window)[:, None]
 
 
@@ -42,14 +44,14 @@ class MDCT(torch.nn.Module):
         super(MDCT, self).__init__()
 
         self.filter_length = filter_length
-        assert ((filter_length % 2) == 0)
+        assert (filter_length % 2) == 0
 
         self.hop_length = filter_length // 2
         self.window_length = window_length if window_length else filter_length
         self.pad_amount = filter_length // 2
 
         # get window and zero center pad it to filter_length
-        assert (filter_length >= self.window_length)
+        assert filter_length >= self.window_length
         self.window = kbd_window_(self.window_length, self.filter_length, alpha=4)
 
         forward_basis = mdct_basis_(filter_length)
@@ -58,8 +60,8 @@ class MDCT(torch.nn.Module):
         inverse_basis = forward_basis.T
         # print("here", inverse_basis.unsqueeze(dim=1).T - inverse_basis.T.unsqueeze(dim=1))
 
-        self.register_buffer('forward_basis', forward_basis.float())
-        self.register_buffer('inverse_basis', inverse_basis.float())
+        self.register_buffer("forward_basis", forward_basis.float())
+        self.register_buffer("inverse_basis", inverse_basis.float())
 
     def transform(self, input_data):
         """Take input data (audio) to MDCT domain.
@@ -75,14 +77,24 @@ class MDCT(torch.nn.Module):
         # Pad data with win_len / 2 on either side
         num_batches, num_samples = input_data.size()
         input_data = input_data.view(num_batches, 1, num_samples)
-        input_data = F.pad(input_data.unsqueeze(1),
-                           (np.ceil(self.pad_amount).astype(int), np.floor(self.pad_amount).astype(int), 0, 0),
-                           mode='constant')
+        input_data = F.pad(
+            input_data.unsqueeze(1),
+            (
+                np.ceil(self.pad_amount).astype(int),
+                np.floor(self.pad_amount).astype(int),
+                0,
+                0,
+            ),
+            mode="constant",
+        )
         input_data = input_data.squeeze(1)
 
-        output = F.conv1d(input_data,
-                          self.forward_basis.unsqueeze(dim=1),
-                          stride=self.hop_length, padding=0)
+        output = F.conv1d(
+            input_data,
+            self.forward_basis.unsqueeze(dim=1),
+            stride=self.hop_length,
+            padding=0,
+        )
 
         # Return magnitude -> MDCT only includes real values
         return output
@@ -99,13 +111,21 @@ class MDCT(torch.nn.Module):
             inverse_transform {tensor} -- Reconstructed audio given magnitude and phase. Of
                 shape (num_batch, num_samples)
         """
-        inverse_transform = F.conv_transpose1d(magnitude,
-                                               self.inverse_basis.T.unsqueeze(dim=1),
-                                               stride=self.hop_length, padding=0)
+        inverse_transform = F.conv_transpose1d(
+            magnitude,
+            self.inverse_basis.T.unsqueeze(dim=1),
+            stride=self.hop_length,
+            padding=0,
+        )
 
-        return (inverse_transform[...,
-                np.ceil(self.pad_amount).astype(int):-np.floor(self.pad_amount).astype(int)]).squeeze(1) * (
-                           4 / self.filter_length)
+        return (
+            inverse_transform[
+                ...,
+                np.ceil(self.pad_amount)
+                .astype(int) : -np.floor(self.pad_amount)
+                .astype(int),
+            ]
+        ).squeeze(1) * (4 / self.filter_length)
 
     def forward(self, input_data):
         """Take input data (audio) to MDCT domain and then back to audio.

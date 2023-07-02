@@ -21,7 +21,7 @@ def prepare_libritts(
     train_subsets=["train-clean-100", "train-clean-360"],
     valid_subsets=["dev-clean"],
     test_subsets=["test-clean"],
-    min_duration={"train": 0, "valid": 0, "test": 0}
+    min_duration={"train": 0, "valid": 0, "test": 0},
 ):
     """
     Prepares the json files for the LibriTTS dataset.
@@ -68,10 +68,11 @@ def prepare_libritts(
     test_list = []
 
     # For every subset of the dataset, if it doesn't exist, downloads it and sets flag to resample the subset
-    for list, subset in zip([train_list, valid_list, test_list], [train_subsets, valid_subsets, test_subsets]):
-        
+    for list, subset in zip(
+        [train_list, valid_list, test_list],
+        [train_subsets, valid_subsets, test_subsets],
+    ):
         for subset_name in subset:
-
             subset_folder = os.path.join(data_folder, "LibriTTS", subset_name)
             subset_archive = os.path.join(data_folder, subset_name + ".tar.gz")
 
@@ -87,18 +88,14 @@ def prepare_libritts(
                     download_file(subset_url, subset_archive)
                     logger.info(f"Downloaded data for subset {subset_name}.")
                 else:
-                    logger.info(
-                        f"Found an archive file for {subset_name}. Unpacking."
-                    )
+                    logger.info(f"Found an archive file for {subset_name}. Unpacking.")
 
                 shutil.unpack_archive(subset_archive, data_folder)
 
             # Collects all files matching the provided extension
             list.extend(get_all_files(subset_folder, match_and=extension))
 
-    logger.info(
-        f"Creating {save_json_train}, {save_json_valid}, and {save_json_test}"
-    )
+    logger.info(f"Creating {save_json_train}, {save_json_valid}, and {save_json_test}")
     logger.info(
         "Note that, in order to save space, resampling will not retain the original audio data."
     )
@@ -133,7 +130,6 @@ def create_json(wav_list, json_file, sample_rate, min_duration):
 
     # Processes all the wav files in the list
     for wav_file in tqdm(wav_list):
-
         # Reads the signal
         signal, sig_sr = torchaudio.load(wav_file)
         signal = signal.squeeze(0)
@@ -150,7 +146,9 @@ def create_json(wav_list, json_file, sample_rate, min_duration):
             signal = signal.unsqueeze(0)
             resampled_signal = resampler(signal)
             os.unlink(wav_file)
-            torchaudio.save(wav_file, resampled_signal, sample_rate=sample_rate, bits_per_sample=16)
+            torchaudio.save(
+                wav_file, resampled_signal, sample_rate=sample_rate, bits_per_sample=16
+            )
 
         # Gets the speaker-id from the utterance-id
         spk_id = uttid.split("_")[0]
@@ -163,17 +161,20 @@ def create_json(wav_list, json_file, sample_rate, min_duration):
                 "length": duration,
                 "segment": True if "train" in json_file else False,
             }
-        else: drop += 1
+        else:
+            drop += 1
 
     # Writes the dictionary to the json file
     json_dir = os.path.dirname(json_file)
     if not os.path.exists(json_dir):
         os.mkdir(json_dir)
-        
+
     with open(json_file, mode="w") as json_f:
         json.dump(json_dict, json_f, indent=2)
 
-    logger.info(f"{json_file} successfully created! Drop {drop} voice segments shorter than {min_duration}s.")
+    logger.info(
+        f"{json_file} successfully created! Drop {drop} voice segments shorter than {min_duration}s."
+    )
 
 
 def skip(*filenames):
@@ -201,6 +202,4 @@ def check_folders(*folders):
 
 
 if __name__ == "__main__":
-    prepare_libritts(
-        "libritts_data", "train.json", "valid.json", "test.json", 16000
-    )
+    prepare_libritts("libritts_data", "train.json", "valid.json", "test.json", 16000)

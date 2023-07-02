@@ -10,11 +10,11 @@ from hyperpyyaml import load_hyperpyyaml
 from datasets import prepare_musdb18
 from pathlib import Path
 
-plt.switch_backend('agg')
+plt.switch_backend("agg")
+
 
 # Brain class for neural audio coding training
 class NCBrain(sb.Brain):
-
     def compute_forward(self, batch, stage):
         """
         Compute for loss calculation and inference in train stage and valid/test stage.
@@ -29,27 +29,29 @@ class NCBrain(sb.Brain):
 
         batch = batch.to(self.device)
         wavs, lens = batch.wav
-        
+
         # Mono and stereo compatible
         if len(wavs.shape) == 2:
             wavs = wavs.unsqueeze(1)
-        
+
         if stage == sb.Stage.TRAIN:
             # The problem of unequal lengths does not occur when using intercepted segments of a specific length during training.
-            
+
             # model forward
             output_dict = self.modules.model(wavs)
-            
+
         else:
             # Padding
             samples = wavs.shape[-1]
             wavs = torch.nn.functional.pad(
-                wavs, (0, self.hparams.hop_length - (samples % self.hparams.hop_length)), "constant"
+                wavs,
+                (0, self.hparams.hop_length - (samples % self.hparams.hop_length)),
+                "constant",
             )
-        
+
             # model forward
             output_dict = self.modules.model(wavs)
-            
+
             # Trimming
             output_dict["raw_wav"] = output_dict["raw_wav"][:, :, :samples]
             output_dict["est_wav"] = output_dict["est_wav"][:, :, :samples]
@@ -80,31 +82,84 @@ class NCBrain(sb.Brain):
         loss = loss_recon + loss_commit
 
         if stage == sb.Stage.TEST and self.step <= self.hparams.log_save:
+            self.hparams.tensorboard_train_logger.log_audio(
+                f"{batch.id[0]}_raw", raw_wav.squeeze(dim=0), self.hparams.sample_rate
+            )
+            self.hparams.tensorboard_train_logger.log_audio(
+                f"{batch.id[0]}_coded",
+                predictions["est_wav"].squeeze(dim=0),
+                self.hparams.sample_rate,
+            )
 
-            self.hparams.tensorboard_train_logger.log_audio(f"{batch.id[0]}_raw", raw_wav.squeeze(dim=0), self.hparams.sample_rate)
-            self.hparams.tensorboard_train_logger.log_audio(f"{batch.id[0]}_coded", predictions["est_wav"].squeeze(dim=0), self.hparams.sample_rate)
-
-            coded_mag, _ = librosa.magphase(librosa.stft(predictions["est_wav"].squeeze().cpu().detach().numpy(), n_fft=self.hparams.n_fft, hop_length=self.hparams.hop_length, win_length=self.hparams.win_length))
-            raw_mag, _ = librosa.magphase(librosa.stft(raw_wav.squeeze().cpu().detach().numpy(), n_fft=self.hparams.n_fft, hop_length=self.hparams.hop_length, win_length=self.hparams.win_length))
+            coded_mag, _ = librosa.magphase(
+                librosa.stft(
+                    predictions["est_wav"].squeeze().cpu().detach().numpy(),
+                    n_fft=self.hparams.n_fft,
+                    hop_length=self.hparams.hop_length,
+                    win_length=self.hparams.win_length,
+                )
+            )
+            raw_mag, _ = librosa.magphase(
+                librosa.stft(
+                    raw_wav.squeeze().cpu().detach().numpy(),
+                    n_fft=self.hparams.n_fft,
+                    hop_length=self.hparams.hop_length,
+                    win_length=self.hparams.win_length,
+                )
+            )
 
             fig, axes = plt.subplots(2, 1, figsize=(6, 6))
-            librosa.display.specshow(librosa.amplitude_to_db(coded_mag), cmap="magma", y_axis="linear", ax=axes[0], sr=self.hparams.sample_rate)
-            axes[0].set_title('coded spec')
-            librosa.display.specshow(librosa.amplitude_to_db(raw_mag), cmap="magma", y_axis="linear", ax=axes[1], sr=self.hparams.sample_rate)
-            axes[1].set_title('raw spec')
+            librosa.display.specshow(
+                librosa.amplitude_to_db(coded_mag),
+                cmap="magma",
+                y_axis="linear",
+                ax=axes[0],
+                sr=self.hparams.sample_rate,
+            )
+            axes[0].set_title("coded spec")
+            librosa.display.specshow(
+                librosa.amplitude_to_db(raw_mag),
+                cmap="magma",
+                y_axis="linear",
+                ax=axes[1],
+                sr=self.hparams.sample_rate,
+            )
+            axes[1].set_title("raw spec")
             plt.tight_layout()
-            self.hparams.tensorboard_train_logger.writer.add_figure(f'{batch.id[0]}_Spectrogram', fig)
+            self.hparams.tensorboard_train_logger.writer.add_figure(
+                f"{batch.id[0]}_Spectrogram", fig
+            )
 
             if not Path(self.hparams.samples_folder).exists():
                 Path.mkdir(Path(self.hparams.samples_folder))
-            torchaudio.save(Path(self.hparams.samples_folder).joinpath(f"{batch.id[0]}_raw.wav"), raw_wav.squeeze(dim=0).cpu(), self.hparams.sample_rate, bits_per_sample=16)
-            torchaudio.save(Path(self.hparams.samples_folder).joinpath(f"{batch.id[0]}_coded.wav"), predictions["est_wav"].squeeze(dim=0).cpu(), self.hparams.sample_rate, bits_per_sample=16)
+            torchaudio.save(
+                Path(self.hparams.samples_folder).joinpath(f"{batch.id[0]}_raw.wav"),
+                raw_wav.squeeze(dim=0).cpu(),
+                self.hparams.sample_rate,
+                bits_per_sample=16,
+            )
+            torchaudio.save(
+                Path(self.hparams.samples_folder).joinpath(f"{batch.id[0]}_coded.wav"),
+                predictions["est_wav"].squeeze(dim=0).cpu(),
+                self.hparams.sample_rate,
+                bits_per_sample=16,
+            )
 
-        self.sisnr_metric.append(batch.id, predictions["est_wav"].squeeze(dim=1), raw_wav.squeeze(dim=1), lens, reduction="batch")
+        self.sisnr_metric.append(
+            batch.id,
+            predictions["est_wav"].squeeze(dim=1),
+            raw_wav.squeeze(dim=1),
+            lens,
+            reduction="batch",
+        )
 
         if stage != sb.Stage.TEST:
-            self.loss_recon_metric.append(batch.id, predict_dict=predictions, lens=lens, reduction="batch")
-            self.loss_commit_metric.append(batch.id, predict_dict=predictions, lens=lens, reduction="batch")
+            self.loss_recon_metric.append(
+                batch.id, predict_dict=predictions, lens=lens, reduction="batch"
+            )
+            self.loss_commit_metric.append(
+                batch.id, predict_dict=predictions, lens=lens, reduction="batch"
+            )
 
         return loss
 
@@ -116,21 +171,19 @@ class NCBrain(sb.Brain):
             stage (sb.Stage): One of sb.Stage.TRAIN, sb.Stage.VALID, or sb.Stage.TEST.
             epoch (int, optional): The currently-starting epoch. This is passed `None` during the test stage. Defaults to None.
         """
-        
+
         self.sisnr_metric = sb.utils.metric_stats.MetricStats(
-            metric=si_snr_loss.si_snr_loss 
+            metric=si_snr_loss.si_snr_loss
         )
 
         # Log the reconstruct and the commit loss in train/valid stage.
         if stage != sb.Stage.TEST:
-
             self.loss_recon_metric = sb.utils.metric_stats.MetricStats(
                 metric=self.hparams.compute_cost_recon
             )
             self.loss_commit_metric = sb.utils.metric_stats.MetricStats(
                 metric=self.hparams.compute_cost_commit
             )
-        
 
     def on_stage_end(self, stage, stage_loss, epoch=None):
         """
@@ -147,20 +200,18 @@ class NCBrain(sb.Brain):
             # Define the train's stats as attributes to be counted at the valid stage.
             self.train_stats = {
                 "loss_recon": self.loss_recon_metric.summarize("average"),
-                "loss_commit": self.loss_commit_metric.summarize("average"), 
-                "sisnr": -self.sisnr_metric.summarize("average")
+                "loss_commit": self.loss_commit_metric.summarize("average"),
+                "sisnr": -self.sisnr_metric.summarize("average"),
             }
             self.train_stats_tb = {
                 "loss_recon": self.loss_recon_metric.scores,
-                "loss_commit": self.loss_commit_metric.scores, 
-                "sisnr": [-i for i in self.sisnr_metric.scores]
+                "loss_commit": self.loss_commit_metric.scores,
+                "sisnr": [-i for i in self.sisnr_metric.scores],
             }
         # Summarize the statistics from the stage for record-keeping.
-            
 
         # At the end of validation, we can write stats and checkpoints
         if stage == sb.Stage.VALID:
-                
             if self.hparams.sched:
                 current_lr, next_lr = self.hparams.lr_scheduler(
                     [self.optimizer], epoch, stage_loss
@@ -169,16 +220,16 @@ class NCBrain(sb.Brain):
 
             valid_stats = {
                 "loss_recon": self.loss_recon_metric.summarize("average"),
-                "loss_commit": self.loss_commit_metric.summarize("average"), 
-                "sisnr": -self.sisnr_metric.summarize("average")
+                "loss_commit": self.loss_commit_metric.summarize("average"),
+                "sisnr": -self.sisnr_metric.summarize("average"),
             }
 
             valid_stats_tb = {
                 "loss_recon": self.loss_recon_metric.scores,
-                "loss_commit": self.loss_commit_metric.scores, 
-                "sisnr": [-i for i in self.sisnr_metric.scores]
+                "loss_commit": self.loss_commit_metric.scores,
+                "sisnr": [-i for i in self.sisnr_metric.scores],
             }
-            
+
             # The train_logger writes a summary to stdout and to the logfile.
             self.hparams.train_logger.log_stats(
                 {"Epoch": epoch},
@@ -187,7 +238,7 @@ class NCBrain(sb.Brain):
             )
 
             self.hparams.tensorboard_train_logger.log_stats(
-                {"Epoch": epoch}, 
+                {"Epoch": epoch},
                 train_stats=self.train_stats_tb,
                 valid_stats=valid_stats_tb,
             )
@@ -198,10 +249,7 @@ class NCBrain(sb.Brain):
 
         # We also write statistics about test data to stdout and to the logfile.
         if stage == sb.Stage.TEST:
-
-            test_stats = {
-                "sisnr": -self.sisnr_metric.summarize("average")
-            }
+            test_stats = {"sisnr": -self.sisnr_metric.summarize("average")}
 
             self.hparams.train_logger.log_stats(
                 {"Epoch loaded": self.hparams.epoch_counter.current},
@@ -242,29 +290,27 @@ def dataio_prep(hparams):
             # Second -> samples, 1s = 44100samples
             segment = hparams["segment"] * hparams["sample_rate"]
             length = int(length * hparams["sample_rate"])
-            
+
             max_audio_start = length - segment
             audio_start = torch.randint(0, max_audio_start, (1,))
             audio_stop = audio_start + segment
-            
+
             # Get wav with the shape [samples, channels]
-            wav = sb.dataio.dataio.read_audio({
-                "file": path,
-                "start": audio_start,
-                "stop": audio_stop
-            })
-            
-            if mono_type == 'avg':
+            wav = sb.dataio.dataio.read_audio(
+                {"file": path, "start": audio_start, "stop": audio_stop}
+            )
+
+            if mono_type == "avg":
                 wav = torch.mean(wav, 1)
-            elif mono_type == 'split':
+            elif mono_type == "split":
                 channel = torch.randint(0, 2, (1,))
                 wav = wav[:, channel]
-                
+
         else:
             wav = sb.dataio.dataio.read_audio(path)
             if mono_type:
                 wav = torch.mean(wav, 1)
-        
+
         # Padded in collate_fn later
         # The shape of wav after padded is [B, samples, channels]
         return wav
@@ -288,7 +334,6 @@ def dataio_prep(hparams):
 
 
 if __name__ == "__main__":
-
     # Reading command line arguments
     hparams_file, run_opts, overrides = sb.parse_arguments(sys.argv[1:])
 
@@ -310,15 +355,14 @@ if __name__ == "__main__":
     sb.utils.distributed.run_on_main(
         prepare_musdb18,
         kwargs={
-            'data_folder':hparams["data_folder"],
-            'save_json_train':hparams["train_annotation"],
-            'save_json_valid':hparams["valid_annotation"],
-            'save_json_test':hparams["test_annotation"],
-            'split':hparams["split"],
-            'audio_type':hparams["audio_type"]
+            "data_folder": hparams["data_folder"],
+            "save_json_train": hparams["train_annotation"],
+            "save_json_valid": hparams["valid_annotation"],
+            "save_json_test": hparams["test_annotation"],
+            "split": hparams["split"],
+            "audio_type": hparams["audio_type"],
         },
     )
-        
 
     # Create dataset objects "train" and "valid"
     datasets = dataio_prep(hparams)
@@ -337,11 +381,11 @@ if __name__ == "__main__":
     # with changing state are managed by the Checkpointer, training can be
     # stopped at any point, and will be resumed on next call.
     nc_brain.fit(
-            epoch_counter=nc_brain.hparams.epoch_counter,
-            train_set=datasets["train"],
-            valid_set=datasets["valid"],
-            train_loader_kwargs=hparams["train_dataloader_options"],
-            valid_loader_kwargs=hparams["valid_dataloader_options"],
+        epoch_counter=nc_brain.hparams.epoch_counter,
+        train_set=datasets["train"],
+        valid_set=datasets["valid"],
+        train_loader_kwargs=hparams["train_dataloader_options"],
+        valid_loader_kwargs=hparams["valid_dataloader_options"],
     )
 
     # Load best checkpoint (highest SISNR) for evaluation

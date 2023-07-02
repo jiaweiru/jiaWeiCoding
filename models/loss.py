@@ -148,7 +148,7 @@ def mel_loss(mel_dict, compression, predict_dict, type, lens=None, reduction="me
     predict_mel = audio2mel(predict_wav).permute(0, 2, 1).contiguous()
     
     if compression:
-        # eps = 1e-5, C = 1, similar to HifiGAN
+        # eps = 1e-5, C = 1, similar to HiFiGAN
         raw_mel = torch.log(torch.clamp(raw_mel, min=1e-5) * 1)
         predict_mel = torch.log(torch.clamp(predict_mel, min=1e-5) * 1)
     if type == 'l2':
@@ -172,6 +172,7 @@ def multimel_loss(mel_dict, level, predict_dict, loss_tp, lens=None, reduction="
         mel_dict["hop_length"] = 2 ** i // 4
         mel_dict["win_length"] = 2 ** i
         mel_dict["n_fft"] = 2 ** i
+        mel_dict["n_mels"] = 5 * (2 ** (i - 5))
         loss += mel_loss(mel_dict, True, predict_dict, loss_tp, lens, reduction)
         
     total_loss = loss / (level[1] + 1 - level[0])
@@ -245,6 +246,7 @@ class MultiScaleMelLoss(nn.Module):
             self.mel_dict["hop_length"] = 2 ** i // 4
             self.mel_dict["win_length"] = 2 ** i
             self.mel_dict["n_fft"] = 2 ** i
+            self.mel_dict["n_mels"] = 5 * (2 ** (i - 5))
     
             audio2mel = transforms.MelSpectrogram(sample_rate=self.mel_dict["sample_rate"], hop_length=self.mel_dict["hop_length"], \
                 win_length=self.mel_dict["win_length"], n_fft=self.mel_dict["n_fft"], n_mels=self.mel_dict["n_mels"], f_min=self.mel_dict["f_min"], \

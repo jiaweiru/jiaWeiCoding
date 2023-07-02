@@ -8,50 +8,50 @@ from compress import NeuralCoding
 from matplotlib import pyplot as plt
 from hyperpyyaml import load_hyperpyyaml
 
-plt.switch_backend('agg')
+plt.switch_backend("agg")
 
 
 @st.cache_resource
-def load_coder(source='/home/sturjw/Code/jiaWeiCoding/hparams',
-               hparams='compress_speech.yaml'):
+def load_coder(
+    source="/home/sturjw/Code/jiaWeiCoding/hparams", hparams="compress_speech.yaml"
+):
     with open(os.path.join(source, hparams)) as fin:
         savedir = load_hyperpyyaml(fin)["exp_dir"]
-    return NeuralCoding.from_hparams(source=source, hparams_file=hparams, savedir=savedir, pymodule_file='')
+    return NeuralCoding.from_hparams(
+        source=source, hparams_file=hparams, savedir=savedir, pymodule_file=""
+    )
+
 
 @st.cache_data
 def compress(file):
-    
     audio, sr = torchaudio.load(file, channels_first=False)
     audio = coder.audio_normalizer(audio, sr).unsqueeze(0).to(coder.device)
     comp = coder.audio2comp(audio)
-    
+
     return comp
+
 
 @st.cache_data
 def decompress(file):
-    
     compressed = file.getvalue()
     audio_rec = coder.comp2audio(compressed)
     fo = io.BytesIO()
-    torchaudio.save(fo, audio_rec.cpu(), coder.sample_rate, format='wav', bits_per_sample=16)
-    
-    return fo
-    
-    
-if __name__ == '__main__':
-    
-    st.set_page_config(
-        page_title="CCCCoder",
-        page_icon="random",
-        layout="wide"
+    torchaudio.save(
+        fo, audio_rec.cpu(), coder.sample_rate, format="wav", bits_per_sample=16
     )
+
+    return fo
+
+
+if __name__ == "__main__":
+    st.set_page_config(page_title="CCCCoder", page_icon="random", layout="wide")
     st.write("## Neural audio coding with CCCCoder")
     st.write(
-    ":dog: Try uploading an audio to encode it. The compressed file can be downloaded from the sidebar. :grin:"
+        ":dog: Try uploading an audio to encode it. The compressed file can be downloaded from the sidebar. :grin:"
     )
-    
+
     st.sidebar.markdown(
-    """
+        """
     ## Compress and de compress :gear:
     
     **Tips:**
@@ -62,28 +62,35 @@ if __name__ == '__main__':
     xie xie :heartbeat:
     """
     )
-    
+
     col1, col2 = st.columns(2)
     col1.write("### Compress here! :musical_note:")
     col2.write("### Decompress here! :tongue:")
-    
+
     audio_file = col1.file_uploader("Upload an aduio", type=["wav", "flac"])
     comp_file = col2.file_uploader("Upload an .cccc compressed file", type=["cccc"])
-    
+
     coder = load_coder()
-    
+
     if audio_file is not None:
-        
         col1.write("Audio is being compressed, please wait. :bicyclist:")
         comp = compress(audio_file)
         col1.write("Done! :star2:")
-        col1.success('Success Compress!', icon="✅")
-        col1.download_button("Download compressed file", comp, os.path.splitext(audio_file.name)[0] + ".cccc")
-        
+        col1.success("Success Compress!", icon="✅")
+        col1.download_button(
+            "Download compressed file",
+            comp,
+            os.path.splitext(audio_file.name)[0] + ".cccc",
+        )
+
     if comp_file is not None:
-        
         col2.write("File is being decompressed, please wait. :bicyclist:")
         wav_io = decompress(comp_file)
         col2.write("Done! :star2:")
-        col2.success('Success Decompress!', icon="✅")
-        col2.download_button("Download decompressed audio file", wav_io, os.path.splitext(comp_file.name)[0] + "decoded.wav", "audio/wav")
+        col2.success("Success Decompress!", icon="✅")
+        col2.download_button(
+            "Download decompressed audio file",
+            wav_io,
+            os.path.splitext(comp_file.name)[0] + "decoded.wav",
+            "audio/wav",
+        )

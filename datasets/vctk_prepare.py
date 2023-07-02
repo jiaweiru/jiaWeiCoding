@@ -12,8 +12,30 @@ from speechbrain.utils.data_utils import get_all_files, download_file
 logger = logging.getLogger(__name__)
 VCTK_URL = "https://datashare.ed.ac.uk/bitstream/handle/10283/3443/VCTK-Corpus-0.92.zip?sequence=2&isAllowed=y"
 # README and license_text files do not need to be downloaded.
-VALID_SPECIFIED = ["p330", "p333", "p334", "p335", "p336", "p339", "p340", "p341", "p343", "p345"]
-TEST_SPECIFIED = ["p347", "p351", "p360", "p361", "p362", "p363", "p364", "p374", "p376", "s5"]
+VALID_SPECIFIED = [
+    "p330",
+    "p333",
+    "p334",
+    "p335",
+    "p336",
+    "p339",
+    "p340",
+    "p341",
+    "p343",
+    "p345",
+]
+TEST_SPECIFIED = [
+    "p347",
+    "p351",
+    "p360",
+    "p361",
+    "p362",
+    "p363",
+    "p364",
+    "p374",
+    "p376",
+    "s5",
+]
 
 
 def prepare_vctk(
@@ -24,7 +46,7 @@ def prepare_vctk(
     sample_rate,
     mic_id=["mic1"],
     min_duration={"train": 0, "valid": 0, "test": 0},
-    split="specified"
+    split="specified",
 ):
     """
     Prepares the json files for the LibriTTS dataset.
@@ -68,14 +90,12 @@ def prepare_vctk(
 
     wav_folder = os.path.join(data_folder, "wav48_silence_trimmed")
     wav_archive = os.path.join(data_folder, "VCTK-Corpus-0.92.zip")
-    
+
     extension = [i + ".flac" for i in mic_id]  # The expected extension for audio files
-    wav_list = [] # Stores all audio file paths for the dataset
+    wav_list = []  # Stores all audio file paths for the dataset
 
     if not check_folders(wav_folder):
-        logger.info(
-            f"No data found for {wav_folder}. Checking for an archive file."
-        )
+        logger.info(f"No data found for {wav_folder}. Checking for an archive file.")
         if not os.path.isfile(wav_archive):
             logger.info(
                 f"No archive file found for {wav_archive}. Downloading and unpacking."
@@ -84,18 +104,14 @@ def prepare_vctk(
             download_file(url, wav_archive)
             logger.info(f"Downloaded data for {wav_archive} from {url}.")
         else:
-            logger.info(
-                f"Found an archive file for {wav_archive}. Unpacking."
-            )
+            logger.info(f"Found an archive file for {wav_archive}. Unpacking.")
 
         shutil.unpack_archive(wav_archive, data_folder)
 
     # Collects all files matching the provided extension
     wav_list.extend(get_all_files(wav_folder, match_or=extension))
 
-    logger.info(
-        f"Creating {save_json_train}, {save_json_valid}, and {save_json_test}"
-    )
+    logger.info(f"Creating {save_json_train}, {save_json_valid}, and {save_json_test}")
     logger.info(
         "Note that, in order to save space, resampling will not retain the original audio data."
     )
@@ -104,8 +120,12 @@ def prepare_vctk(
     data_split = split_sets(wav_list, split)
 
     # Creating json files
-    create_json(data_split["train"], save_json_train, sample_rate, min_duration["train"])
-    create_json(data_split["valid"], save_json_valid, sample_rate, min_duration["valid"])
+    create_json(
+        data_split["train"], save_json_train, sample_rate, min_duration["train"]
+    )
+    create_json(
+        data_split["valid"], save_json_valid, sample_rate, min_duration["valid"]
+    )
     create_json(data_split["test"], save_json_test, sample_rate, min_duration["test"])
 
 
@@ -130,10 +150,9 @@ def create_json(wav_list, json_file, sample_rate, min_duration):
     resampler = Resample(orig_freq=48000, new_freq=sample_rate)
 
     logger.info(f"{json_file} is being created, please wait.")
-    
+
     # Processes all the wav files in the list
     for wav_file in tqdm(wav_list):
-
         # Reads the signal
         signal, sig_sr = torchaudio.load(wav_file)
         signal = signal.squeeze(0)
@@ -150,7 +169,9 @@ def create_json(wav_list, json_file, sample_rate, min_duration):
             signal = signal.unsqueeze(0)
             resampled_signal = resampler(signal)
             os.unlink(wav_file)
-            torchaudio.save(wav_file, resampled_signal, sample_rate=sample_rate, bits_per_sample=16)
+            torchaudio.save(
+                wav_file, resampled_signal, sample_rate=sample_rate, bits_per_sample=16
+            )
 
         # Gets the speaker-id from the utterance-id
         spk_id = uttid.split("_")[0]
@@ -163,17 +184,20 @@ def create_json(wav_list, json_file, sample_rate, min_duration):
                 "length": duration,
                 "segment": True if "train" in json_file else False,
             }
-        else: drop += 1
+        else:
+            drop += 1
 
     # Writes the dictionary to the json file
     json_dir = os.path.dirname(json_file)
     if not os.path.exists(json_dir):
         os.mkdir(json_dir)
-        
+
     with open(json_file, mode="w") as json_f:
         json.dump(json_dict, json_f, indent=2)
 
-    logger.info(f"{json_file} successfully created! Drop {drop} voice segments shorter than {min_duration}s.")
+    logger.info(
+        f"{json_file} successfully created! Drop {drop} voice segments shorter than {min_duration}s."
+    )
 
 
 def skip(*filenames):
@@ -210,16 +234,29 @@ def split_sets(wav_list, split, shuffle=True):
     """
     if split == "specified":
         data_split = {
-            "valid": [t for t in wav_list if os.path.basename(os.path.dirname(t)) in VALID_SPECIFIED],
-            "test": [t for t in wav_list if os.path.basename(os.path.dirname(t)) in TEST_SPECIFIED],
-            "train": [t for t in wav_list if os.path.basename(os.path.dirname(t)) not in VALID_SPECIFIED + TEST_SPECIFIED]
-            }
+            "valid": [
+                t
+                for t in wav_list
+                if os.path.basename(os.path.dirname(t)) in VALID_SPECIFIED
+            ],
+            "test": [
+                t
+                for t in wav_list
+                if os.path.basename(os.path.dirname(t)) in TEST_SPECIFIED
+            ],
+            "train": [
+                t
+                for t in wav_list
+                if os.path.basename(os.path.dirname(t))
+                not in VALID_SPECIFIED + TEST_SPECIFIED
+            ],
+        }
         return data_split
-    
+
     # Random shuffles the list
     if shuffle:
         random.shuffle(wav_list)
-        
+
     tot_split = sum(split)
     tot_snts = len(wav_list)
     data_split = {}
@@ -227,8 +264,8 @@ def split_sets(wav_list, split, shuffle=True):
 
     for i, set in enumerate(splits):
         n_snts = int(tot_snts * split[i] / tot_split)
-        data_split[set] = wav_list[0: n_snts]
-        del wav_list[0: n_snts]
+        data_split[set] = wav_list[0:n_snts]
+        del wav_list[0:n_snts]
     data_split["test"] = wav_list
 
     return data_split
@@ -244,6 +281,13 @@ def check_folders(*folders):
 
 if __name__ == "__main__":
     prepare_vctk(
-        "/home/sturjw/Datasets/VCTK_test", "./train.json", "./valid.json", "./test.json", 16000, min_duration={"train": 0, "valid": 0, "test": 0}, mic_id=["mic1", "mic2"], split=[10, 10, 80]
+        "/home/sturjw/Datasets/VCTK_test",
+        "./train.json",
+        "./valid.json",
+        "./test.json",
+        16000,
+        min_duration={"train": 0, "valid": 0, "test": 0},
+        mic_id=["mic1", "mic2"],
+        split=[10, 10, 80],
     )
     # ouptut under ./datasets

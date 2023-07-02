@@ -9,6 +9,7 @@ class AttentionMask(nn.Module):
     Time attention with causal_mask
     Freq attention without mask
     """
+
     def __init__(self, causal):
         super(AttentionMask, self).__init__()
         self.causal = causal
@@ -25,19 +26,24 @@ class AttentionMask(nn.Module):
         """
         row_index = torch.cumsum(torch.ones(size=shape), dim=-2)
         col_index = torch.cumsum(torch.ones(size=shape), dim=-1)
-        return torch.lt(row_index, col_index)  # lower triangle:True, upper triangle:False
+        return torch.lt(
+            row_index, col_index
+        )  # lower triangle:True, upper triangle:False
 
     def merge_masks(self, x, y):
-
-        if x is None: return y
-        if y is None: return x
+        if x is None:
+            return y
+        if y is None:
+            return x
         return torch.logical_and(x, y)
 
     def forward(self, inp):
         # input (bs, L, ...)
         max_seq_len = inp.shape[1]
         if self.causal:
-            causal_mask = self.lower_triangular_mask([max_seq_len, max_seq_len])  # (L, l)
+            causal_mask = self.lower_triangular_mask(
+                [max_seq_len, max_seq_len]
+            )  # (L, l)
             return causal_mask
         else:
             return torch.zeros(size=(max_seq_len, max_seq_len), dtype=torch.float32)
@@ -68,8 +74,7 @@ class PositionalEncoding(nn.Module):
         pe = torch.zeros(self.max_len, input_size, requires_grad=False)
         positions = torch.arange(0, self.max_len).unsqueeze(1).float()
         denominator = torch.exp(
-            torch.arange(0, input_size, 2).float()
-            * -(math.log(10000.0) / input_size)
+            torch.arange(0, input_size, 2).float() * -(math.log(10000.0) / input_size)
         )
 
         pe[:, 0::2] = torch.sin(positions * denominator)
@@ -91,13 +96,16 @@ class MultiHeadAttentionEncoder(nn.Module):
     """
     MHA encoder without attention mask
     """
+
     def __init__(self, d_model, d_ff, n_heads, is_pe):
         super(MultiHeadAttentionEncoder, self).__init__()
         self.d_model = d_model
         self.d_ff = d_ff
         self.n_heads = n_heads
 
-        self.MHA = nn.MultiheadAttention(embed_dim=self.d_model, num_heads=self.n_heads, bias=False)
+        self.MHA = nn.MultiheadAttention(
+            embed_dim=self.d_model, num_heads=self.n_heads, bias=False
+        )
         self.norm_1 = nn.LayerNorm([self.d_model], eps=1e-6)
         self.fc_1 = nn.Conv1d(self.d_model, self.d_ff, 1)
         self.act = nn.ReLU()
@@ -139,4 +147,3 @@ class MultiHeadAttentionEncoder(nn.Module):
         # out = torch.add(out, x)
 
         return out
-    

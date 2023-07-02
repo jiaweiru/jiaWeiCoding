@@ -7,7 +7,7 @@ from scipy.signal import get_window
 
 
 def init_kernels(win_len, win_inc, fft_len, win_type=None, invers=False):
-    if win_type == 'None' or win_type is None:
+    if win_type == "None" or win_type is None:
         window = np.ones(win_len)
     else:
         window = get_window(win_type, win_len, fftbins=True)  # **0.5
@@ -23,12 +23,21 @@ def init_kernels(win_len, win_inc, fft_len, win_type=None, invers=False):
 
     kernel = kernel * window
     kernel = kernel[:, None, :]
-    return torch.from_numpy(kernel.astype(np.float32)), torch.from_numpy(window[None, :, None].astype(np.float32))
+    return torch.from_numpy(kernel.astype(np.float32)), torch.from_numpy(
+        window[None, :, None].astype(np.float32)
+    )
 
 
 class ConvSTFT(nn.Module):
-
-    def __init__(self, win_len, win_inc, fft_len=None, win_type='hamming', feature_type='real', fix=True):
+    def __init__(
+        self,
+        win_len,
+        win_inc,
+        fft_len=None,
+        win_type="hamming",
+        feature_type="real",
+        fix=True,
+    ):
         super(ConvSTFT, self).__init__()
 
         if fft_len is None:
@@ -38,7 +47,7 @@ class ConvSTFT(nn.Module):
 
         kernel, _ = init_kernels(win_len, win_inc, self.fft_len, win_type)
         # self.weight = nn.Parameter(kernel, requires_grad=(not fix))
-        self.register_buffer('weight', kernel)
+        self.register_buffer("weight", kernel)
         self.feature_type = feature_type
         self.stride = win_inc
         self.win_len = win_len
@@ -50,36 +59,45 @@ class ConvSTFT(nn.Module):
         inputs = F.pad(inputs, [self.win_len - self.stride, self.win_len - self.stride])
         outputs = F.conv1d(inputs, self.weight, stride=self.stride)
 
-        if self.feature_type == 'complex':
+        if self.feature_type == "complex":
             return outputs
         else:
             dim = self.dim // 2 + 1
             real = outputs[:, :dim, :]
             imag = outputs[:, dim:, :]
-            mags = torch.sqrt(real ** 2 + imag ** 2)
+            mags = torch.sqrt(real**2 + imag**2)
             phase = torch.atan2(imag, real)
             return mags, phase
 
 
 class ConviSTFT(nn.Module):
-
-    def __init__(self, win_len, win_inc, fft_len=None, win_type='hamming', feature_type='real', fix=True):
+    def __init__(
+        self,
+        win_len,
+        win_inc,
+        fft_len=None,
+        win_type="hamming",
+        feature_type="real",
+        fix=True,
+    ):
         super(ConviSTFT, self).__init__()
         if fft_len is None:
             self.fft_len = np.int(2 ** np.ceil(np.log2(win_len)))
         else:
             self.fft_len = fft_len
-        kernel, window = init_kernels(win_len, win_inc, self.fft_len, win_type, invers=True)
+        kernel, window = init_kernels(
+            win_len, win_inc, self.fft_len, win_type, invers=True
+        )
         # self.weight = nn.Parameter(kernel, requires_grad=(not fix))
-        self.register_buffer('weight', kernel)
+        self.register_buffer("weight", kernel)
         self.feature_type = feature_type
         self.win_type = win_type
         self.win_len = win_len
         self.stride = win_inc
         self.stride = win_inc
         self.dim = self.fft_len
-        self.register_buffer('window', window)
-        self.register_buffer('enframe', torch.eye(win_len)[:, None, :])
+        self.register_buffer("window", window)
+        self.register_buffer("enframe", torch.eye(win_len)[:, None, :])
 
     def forward(self, inputs, phase=None):
         """
@@ -98,6 +116,8 @@ class ConviSTFT(nn.Module):
         coff = F.conv_transpose1d(t, self.enframe, stride=self.stride)
         outputs = outputs / (coff + 1e-8)
         # outputs = torch.where(coff == 0, outputs, outputs/coff)
-        outputs = outputs[..., self.win_len - self.stride:-(self.win_len - self.stride)]
+        outputs = outputs[
+            ..., self.win_len - self.stride : -(self.win_len - self.stride)
+        ]
 
         return outputs

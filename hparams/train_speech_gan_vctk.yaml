@@ -60,13 +60,13 @@ tensorboard_train_logger: !new:speechbrain.utils.train_logger.TensorboardLogger
     save_dir: !ref <tensorboard_logs>
 
 # Training Parameters
-number_of_epochs: 800
+number_of_epochs: 400
 batch_size: 64
 max_grad_norm: 5.0
-valid_epochs: 20
+valid_epochs: 40
 
 fine_tune: True
-trained_generator: /home/sturjw/Code/jiaWeiCoding/results/speech/2234/ARGAN_coder_VCTK/save/CKPT+2023-06-20+13-12-46+00/model.ckpt
+trained_generator: 
 
 # Test stage:
 # Visualize and save the first few audios
@@ -147,7 +147,7 @@ mel_dict:
 stft_loss: null
 commit_loss: !new:models.CommitLoss
 magri_loss: !new:models.MagRILoss
-  loss_tp: l1
+  loss_tp: l2
 mseg_loss: !new:speechbrain.lobes.models.HifiGAN.MSEGLoss
 feat_match_loss: !new:speechbrain.lobes.models.HifiGAN.MelganFeatureLoss
 multimel_loss: !new:models.MultiScaleMelLoss
