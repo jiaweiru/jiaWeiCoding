@@ -1,5 +1,3 @@
-"""discriminator.py"""
-
 import torch
 import torchaudio
 import torch.nn as nn

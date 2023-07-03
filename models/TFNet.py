@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .modules import ConvSTFT, ConviSTFT, VectorQuantizerEMA1D
+from .modules import ConvSTFT, ConviSTFT, GroupVectorQuantizer
 
 
 EPSILON = torch.finfo(torch.float32).eps
@@ -261,82 +261,6 @@ class TCM(nn.Module):
         return x
 
 
-class GroupVectorQuantizer(nn.Module):
-    """
-    Group VectorQuantizer by using VectorQuantizerEMA1D.
-
-    Flatten the features of each frame, then group these features and perform vector quantization.
-    """
-
-    def __init__(self, embedding_dim, num_groups, vq_byte, channels):
-        super(GroupVectorQuantizer, self).__init__()
-        self.channels = channels
-        self.fbins = embedding_dim // channels
-        self.embedding_dim = embedding_dim
-        self.num_groups = num_groups
-        assert embedding_dim % num_groups == 0, (
-            f"Can't group by the setting: embedding_dim={embedding_dim}, "
-            f"num_groups={num_groups} "
-        )
-
-        self.sub_dim = embedding_dim // num_groups
-        self.num_embeddings = 2**vq_byte
-        # for each codebook
-
-        self.codebooks = nn.ModuleList()
-        for idx in range(self.num_groups):
-            self.codebooks.append(
-                VectorQuantizerEMA1D(self.sub_dim, self.num_embeddings)
-            )
-
-    def encode(self, x):
-        x = x.reshape(x.shape[0], x.shape[1] * x.shape[2], x.shape[3])
-        indices_list = []
-
-        for idx, s in enumerate(torch.chunk(x, self.num_groups, dim=1)):
-            indices = self.codebooks[idx].encode(s)
-            # [B, T,]
-            indices_list.append(indices)
-
-        return indices_list
-
-    def decode(self, indices_list):
-        s_q_list = []
-
-        for idx, indices in enumerate(indices_list):
-            s_q = self.codebooks[idx].decode(indices)
-            s_q_list.append(s_q)
-
-        x_q = torch.cat(s_q_list, dim=1)
-        x_q = x_q.reshape(x_q.shape[0], self.channels, self.fbins, x_q.shape[-1])
-
-        return x_q
-
-    def forward(self, x):
-        """
-        Input shape:[B, C, F, T]
-        Output shape:[B, C, F, T], [B, C, F, T](with no gradient)
-        """
-        x = x.reshape(x.shape[0], x.shape[1] * x.shape[2], x.shape[3])
-
-        s_q_list = []
-        s_q_detach_list = []
-        for idx, s in enumerate(torch.chunk(x, self.num_groups, dim=1)):
-            # [B, sub_dim, T]
-            s_q, s_q_detach = self.codebooks[idx](s)
-            s_q_list.append(s_q)
-            s_q_detach_list.append(s_q_detach)
-        x_q = torch.cat(s_q_list, dim=1)
-        x_q = x_q.reshape(x_q.shape[0], self.channels, self.fbins, x_q.shape[-1])
-
-        x_q_detach = torch.cat(s_q_detach_list, dim=1)
-        x_q_detach = x_q_detach.reshape(
-            x_q_detach.shape[0], self.channels, self.fbins, x_q_detach.shape[-1]
-        )
-
-        return x_q, x_q_detach
-
-
 def power_law(x, alpha=0.5):
     """
     Input shape:[B, 2, F, T]
@@ -478,7 +402,7 @@ class TFNet(nn.Module):
 
         feature = self.tf_encoder(out)
 
-        quantized, quantized_detach = self.vector_quantizer(feature)
+        quantized, vq_input, vq_output_detach = self.vector_quantizer(feature)
 
         out = self.tf_decoder(quantized)
 
@@ -511,6 +435,6 @@ class TFNet(nn.Module):
             "est_mags_comp": est_mags_comp,
             "est_wav": out_wav,
             "raw_wav": x,
-            "feature": feature,
-            "quantized_feature": quantized_detach,
+            "vq_input": vq_input,
+            "vq_output_detach": vq_output_detach,
         }

@@ -113,7 +113,7 @@ generator: !new:models.ARN
     rnn_type: LSTM
     attn_layers: 2
     n_heads: 8
-    groups: 6
+    n_quantizers: 6
     bit_per_cbk: 10
     comp_law: power-law
     alpha: 0.5
