@@ -349,7 +349,7 @@ class TFNet(nn.Module):
         self.embedding_dim = 120
         self.bit_per_cbk = bit_per_cbk
         self.vector_quantizer = GroupVectorQuantizer(
-            self.embedding_dim, self.groups, self.bit_per_cbk, 120
+            self.embedding_dim, self.groups, self.bit_per_cbk
         )
 
         self.alpha = alpha
@@ -366,12 +366,16 @@ class TFNet(nn.Module):
 
         feature = self.tf_encoder(out)
 
+        feature = feature.reshape(feature.shape[0], -1, feature.shape[-1])
         indices = self.vector_quantizer.encode(feature)
 
         return indices
 
     def decode(self, indices):
         quantized = self.vector_quantizer.decode(indices)
+        quantized = quantized.reshape(
+            quantized.shape[0], self.kernel_num[-1], -1, quantized.shape[-1]
+        )
 
         out = self.tf_decoder(quantized)
 
@@ -402,7 +406,11 @@ class TFNet(nn.Module):
 
         feature = self.tf_encoder(out)
 
+        feature = feature.reshape(feature.shape[0], -1, feature.shape[-1])
         quantized, vq_input, vq_output_detach = self.vector_quantizer(feature)
+        quantized = quantized.reshape(
+            quantized.shape[0], self.kernel_num[-1], -1, quantized.shape[-1]
+        )
 
         out = self.tf_decoder(quantized)
 

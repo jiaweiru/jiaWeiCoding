@@ -420,14 +420,12 @@ class ARN(nn.Module):
                 self.embedding_dim,
                 self.n_quantizers,
                 self.bit_per_cbk,
-                self.kernel_num[-1],
             )
         elif vq == "RVQ":
             self.vector_quantizer = ResidualVectorQuantizer(
                 self.embedding_dim,
                 self.n_quantizers,
                 self.bit_per_cbk,
-                self.kernel_num[-1],
             )
 
         assert comp_law in [
@@ -461,12 +459,16 @@ class ARN(nn.Module):
         res = self.rnn_encoder(out)
         feature = torch.add(out, res)
 
+        feature = feature.reshape(feature.shape[0], -1, feature.shape[-1])
         indices = self.vector_quantizer.encode(feature)
 
         return indices
 
     def decode(self, indices):
         quantized = self.vector_quantizer.decode(indices)
+        quantized = quantized.reshape(
+            quantized.shape[0], self.kernel_num[-1], -1, quantized.shape[-1]
+        )
 
         res = self.rnn_decoder(quantized)
         out = torch.add(quantized, res)
@@ -521,7 +523,12 @@ class ARN(nn.Module):
 
         res = self.rnn_encoder(out)
         feature = torch.add(out, res)
+
+        feature = feature.reshape(feature.shape[0], -1, feature.shape[-1])
         quantized, vq_input, vq_output_detach = self.vector_quantizer(feature)
+        quantized = quantized.reshape(
+            quantized.shape[0], self.kernel_num[-1], -1, quantized.shape[-1]
+        )
 
         res = self.rnn_decoder(quantized)
         out = torch.add(quantized, res)

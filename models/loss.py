@@ -103,9 +103,7 @@ def commit_loss(predict_dict, cost, lens=None, reduction="mean"):
             f_q.permute(0, 2, 1).contiguous(),
         )
         # Use speechbrain style to accommodate variable length training.
-
         loss += mse_loss(f, f_q, length=lens, reduction=reduction)
-
     return loss / n_quantizers * cost
 
 
