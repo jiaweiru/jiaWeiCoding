@@ -209,8 +209,8 @@ class VectorQuantizerEMAProject1D(nn.Module):
         """
         Input the vector to be quantized and output the codebook indices
         """
-        # [B, D, T] -> [B, T, D]
         x = self.proj_in(x)
+        # [B, D, T] -> [B, T, D]
         x = x.permute(0, 2, 1).contiguous()
         # [B, T, D] -> [B * T, D]
         flat_x = x.reshape(-1, self.project_dim)
@@ -227,9 +227,8 @@ class VectorQuantizerEMAProject1D(nn.Module):
         """
         quantized = self.quantize(indices)
         quantized = quantized.permute(0, 2, 1).contiguous()
-        quantized = self.proj_out(quantized)
 
-        return quantized
+        return self.proj_out(quantized)
 
     def forward(self, x):
         """
@@ -250,9 +249,9 @@ class VectorQuantizerEMAProject1D(nn.Module):
         if not self.training:
             # e_latent_loss = F.mse_loss(x, quantized.detach())
             quantized = quantized.permute(0, 2, 1).contiguous()
-            quantized = self.proj_out(quantized)
             # loss = self.commitment_cost * e_latent_loss
-            return quantized, quantized.detach()
+            x = x.permute(0, 2, 1).contiguous()
+            return self.proj_out(quantized), x, quantized.detach()
             # return quantized, loss
 
         # update embeddings with EMA
@@ -284,8 +283,8 @@ class VectorQuantizerEMAProject1D(nn.Module):
         quantized = x + (quantized - x).detach()
 
         quantized = quantized.permute(0, 2, 1).contiguous()
-        quantized = self.proj_out(quantized)
-        return quantized, quantized.detach()
+        x = x.permute(0, 2, 1).contiguous()
+        return self.proj_out(quantized), x, quantized.detach()
         # return quantized, loss
 
     def get_code_indices(self, flat_x):
@@ -308,16 +307,20 @@ class ResidualVectorQuantizer(nn.Module):
     Follows Algorithm 1. in https://arxiv.org/pdf/2107.03312.pdf
     """
 
-    def __init__(self, embedding_dim, num_quantizers, vq_byte, decay=0.8):
+    def __init__(self, embedding_dim, project_dim, num_quantizers, vq_byte, decay=0.99):
         super().__init__()
 
         self.embedding_dim = embedding_dim
+        self.project_dim = project_dim
         self.num_embeddings = 2**vq_byte
         self.num_quantizers = num_quantizers
         self.codebooks = nn.ModuleList(
             [
                 VectorQuantizerEMAProject1D(
-                    self.embedding_dim, 64, self.num_embeddings, decay=decay
+                    self.embedding_dim,
+                    self.project_dim,
+                    self.num_embeddings,
+                    decay=decay,
                 )
                 for _ in range(self.num_quantizers)
             ]
@@ -330,8 +333,8 @@ class ResidualVectorQuantizer(nn.Module):
 
         for layer in self.codebooks[:n_q]:
             indices = layer.encode(residual)
-            quantized, _ = layer(residual)
-            residual = residual - quantized
+            quantized, _, _ = layer(residual)
+            residual = residual - quantized.detach()
             # considering only the first layer's gradient
             indices_list.append(indices)
 
@@ -357,13 +360,13 @@ class ResidualVectorQuantizer(nn.Module):
         # no dropout
 
         for layer in self.codebooks[:n_q]:
-            quantized, quantized_detach = layer(residual)
+            quantized, vq_in, vq_out = layer(residual)
             residual = residual - quantized
             # considering only the first layer's gradient
             quantized_out = quantized_out + quantized
 
-            input_list.append(residual)
-            q_detach_list.append(quantized_detach)
+            input_list.append(vq_in)
+            q_detach_list.append(vq_out)
 
         return quantized_out, input_list, q_detach_list
 
@@ -374,7 +377,9 @@ class GroupVectorQuantizer(nn.Module):
     features and perform vector quantization.
     """
 
-    def __init__(self, embedding_dim, num_groups, vq_byte, decay=0.99):
+    def __init__(
+        self, embedding_dim, num_groups, vq_byte, project_dim=None, decay=0.99
+    ):
         super(GroupVectorQuantizer, self).__init__()
         self.embedding_dim = embedding_dim
         self.num_groups = num_groups
@@ -387,12 +392,24 @@ class GroupVectorQuantizer(nn.Module):
         self.num_embeddings = 2**vq_byte
         # for each codebook
 
-        self.codebooks = nn.ModuleList(
-            [
-                VectorQuantizerEMA1D(self.sub_dim, self.num_embeddings, decay=decay)
-                for _ in range(self.num_groups)
-            ]
-        )
+        if project_dim:
+            self.project_dim = project_dim
+            self.codebooks = nn.ModuleList(
+                [
+                    VectorQuantizerEMAProject1D(
+                        self.sub_dim, self.project_dim, self.num_embeddings, decay=decay
+                    )
+                    for _ in range(self.num_groups)
+                ]
+            )
+
+        else:
+            self.codebooks = nn.ModuleList(
+                [
+                    VectorQuantizerEMA1D(self.sub_dim, self.num_embeddings, decay=decay)
+                    for _ in range(self.num_groups)
+                ]
+            )
 
     def encode(self, x):
         indices_list = []
@@ -426,10 +443,16 @@ class GroupVectorQuantizer(nn.Module):
         s_q_detach_list = []
         for idx, s in enumerate(torch.chunk(x, self.num_groups, dim=1)):
             # [B, sub_dim, T]
-            s_q, s_q_detach = self.codebooks[idx](s)
-            input_list.append(s)
-            s_q_list.append(s_q)
-            s_q_detach_list.append(s_q_detach)
+            if self.project_dim:
+                s_q, vq_in, vq_out = self.codebooks[idx](s)
+                input_list.append(vq_in)
+                s_q_list.append(s_q)
+                s_q_detach_list.append(vq_out)
+            else:
+                s_q, s_q_detach = self.codebooks[idx](s)
+                input_list.append(s)
+                s_q_list.append(s_q)
+                s_q_detach_list.append(s_q_detach)
         x_q = torch.cat(s_q_list, dim=1)
 
         return x_q, input_list, s_q_detach_list

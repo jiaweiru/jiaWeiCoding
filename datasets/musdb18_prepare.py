@@ -86,8 +86,8 @@ def prepare_musdb18(
     track_list = []  # Stores all audio file paths for the dataset
 
     # For the dataset, if it doesn't exist, downloads it and create json file
-    train_folder = os.path.join(data_folder, "train")
-    test_folder = os.path.join(data_folder, "test")
+    train_folder = os.path.join(data_folder, "musdb18HQ", "train")
+    test_folder = os.path.join(data_folder, "musdb18HQ", "test")
     subset_archive = os.path.join(data_folder, "musdb18hq.zip")
 
     if not check_folders(train_folder, test_folder):
@@ -157,7 +157,7 @@ def create_json(track_list, json_file, extension, repeat):
         path_parts = wav_file.split(os.path.sep)
         uttid, _ = os.path.splitext(path_parts[-1])
         uttid = path_parts[-2] + "-" + uttid
-        relative_path = os.path.join("{data_root}", *path_parts[-3:])
+        relative_path = os.path.join("{data_root}", *path_parts[-4:])
 
         # Creates an entry for the utterance
         json_dict[uttid] = {

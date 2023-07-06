@@ -12,7 +12,10 @@ from .convstft import ConvSTFT, ConviSTFT
 
 from .attention import MultiHeadAttentionEncoder
 
-from .quantizer import GroupVectorQuantizer, ResidualVectorQuantizer
+from .quantizer import (
+    GroupVectorQuantizer,
+    ResidualVectorQuantizer,
+)
 
 # Use VQ modified from VQ-VAE
 # Gumbel softmax for constant bitrate and RVQ/CSVQ for scalabe coding need to be developed

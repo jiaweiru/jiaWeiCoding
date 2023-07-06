@@ -334,6 +334,7 @@ class ARN(nn.Module):
         n_heads=8,
         # attn params
         vq="GVQ",
+        project_dim=64,
         n_quantizers=48,
         bit_per_cbk=10,
         # VQ params
@@ -411,19 +412,22 @@ class ARN(nn.Module):
         )
         # 4x in FFN
 
-        assert vq in ["GVQ", "RVQ"], "Only support GVQ or RVQ"
+        assert vq in ["GVQ", "RVQ", "MPRVQ"], "Only support GVQ or RVQ"
         self.vq = vq
         self.n_quantizers = n_quantizers
         self.bit_per_cbk = bit_per_cbk
+        self.project_dim = project_dim
         if vq == "GVQ":
             self.vector_quantizer = GroupVectorQuantizer(
                 self.embedding_dim,
                 self.n_quantizers,
                 self.bit_per_cbk,
+                self.project_dim,
             )
         elif vq == "RVQ":
             self.vector_quantizer = ResidualVectorQuantizer(
                 self.embedding_dim,
+                self.project_dim,
                 self.n_quantizers,
                 self.bit_per_cbk,
             )
