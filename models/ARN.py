@@ -334,9 +334,10 @@ class ARN(nn.Module):
         n_heads=8,
         # attn params
         vq="GVQ",
-        project_dim=64,
+        project_dim=None,
         n_quantizers=48,
         bit_per_cbk=10,
+        decay=0.99,
         # VQ params
         comp_law="power-law",
         alpha=0.5,
@@ -417,12 +418,14 @@ class ARN(nn.Module):
         self.n_quantizers = n_quantizers
         self.bit_per_cbk = bit_per_cbk
         self.project_dim = project_dim
+        self.decay = decay
         if vq == "GVQ":
             self.vector_quantizer = GroupVectorQuantizer(
                 self.embedding_dim,
+                self.project_dim,
                 self.n_quantizers,
                 self.bit_per_cbk,
-                self.project_dim,
+                self.decay,
             )
         elif vq == "RVQ":
             self.vector_quantizer = ResidualVectorQuantizer(
@@ -430,6 +433,7 @@ class ARN(nn.Module):
                 self.project_dim,
                 self.n_quantizers,
                 self.bit_per_cbk,
+                self.decay,
             )
 
         assert comp_law in [
