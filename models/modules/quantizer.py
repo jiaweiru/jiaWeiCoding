@@ -48,12 +48,6 @@ class VectorQuantize(nn.Module):
         # self.commitment_cost = commitment_cost
         self.epsilon = epsilon
 
-        # initialize embeddings as buffers
-        embeddings = torch.empty(self.num_embeddings, self.embedding_dim)
-        nn.init.xavier_uniform_(embeddings)
-        self.register_buffer("embeddings", embeddings)
-        self.ema_dw = ExponentialMovingAverage(self.embeddings, decay)
-
         # also maintain ema_cluster_size， which record the size of each embedding
         self.ema_cluster_size = ExponentialMovingAverage(
             torch.zeros((self.num_embeddings,)), decay
@@ -69,20 +63,25 @@ class VectorQuantize(nn.Module):
                 nn.Conv1d(self.project_dim, self.embedding_dim, kernel_size=1),
                 nn.BatchNorm1d(self.embedding_dim),
             )
+            embeddings = torch.empty(self.num_embeddings, self.project_dim)
+        else: 
+            # initialize embeddings as buffers
+            embeddings = torch.empty(self.num_embeddings, self.embedding_dim)
+        
+        nn.init.xavier_uniform_(embeddings)
+        self.register_buffer("embeddings", embeddings)
+        self.ema_dw = ExponentialMovingAverage(self.embeddings, decay)
 
     def encode(self, x):
         """
         Input the vector to be quantized and output the codebook indices
         """
         if self.project_dim:
-            vq_in = self.proj_in(x)
+            vq_in = self.proj_in(x).permute(0, 2, 1).contiguous()
+            flatten = vq_in.reshape(-1, self.project_dim)
         else:
-            vq_in = x
-
-        # [B, D, T] -> [B, T, D]
-        vq_in = vq_in.permute(0, 2, 1).contiguous()
-        # [B, T, D] -> [B * T, D]
-        flatten = vq_in.reshape(-1, self.embedding_dim)
+            vq_in = x.permute(0, 2, 1).contiguous()
+            flatten = vq_in.reshape(-1, self.embedding_dim)
 
         encoding_indices = self.get_code_indices(flatten)
         encoding_indices = encoding_indices.reshape(vq_in.shape[0], vq_in.shape[1])
@@ -111,14 +110,11 @@ class VectorQuantize(nn.Module):
         D indicates the features of each frame
         """
         if self.project_dim:
-            vq_in = self.proj_in(x)
+            vq_in = self.proj_in(x).permute(0, 2, 1).contiguous()
+            flatten = vq_in.reshape(-1, self.project_dim)
         else:
-            vq_in = x
-
-        # [B, D, T] -> [B, T, D]
-        vq_in = vq_in.permute(0, 2, 1).contiguous()
-        # [B, T, D] -> [B * T, D]
-        flatten = vq_in.reshape(-1, self.embedding_dim)
+            vq_in = x.permute(0, 2, 1).contiguous()
+            flatten = vq_in.reshape(-1, self.embedding_dim)
 
         encoding_indices = self.get_code_indices(flatten)
         vq_out = self.quantize(encoding_indices)
