@@ -12,10 +12,10 @@ __set_seed: !!python/object/apply:torch.manual_seed [!ref <seed>]
 # 4- Set data_folder with the local path.
 # Reading data from the local disk of the compute node (e.g. $SLURM_TMPDIR with SLURM-based clusters) is very important.
 # It allows you to read the data much faster without slowing down the shared filesystem.
-data_folder: /home/sturjw/Datasets/MUSDB18-HQ
+data_folder: /home/jiawei/Datasets/MUSDB18HQ
 json_folder: ./json
 
-output_folder: !ref ./results/audio/<seed>/ARN_853K_SamsungSet_12kbps_GVQ_proj
+output_folder: !ref ./results/audio/<seed>/ARN_853K_SamsungSet_48kbps_RVQ_proj
 save_folder: !ref <output_folder>/save
 samples_folder: !ref <output_folder>/test_samples
 
@@ -102,9 +102,9 @@ model: !new:models.ARN
     rnn_type: LSTM
     attn_layers: 2
     n_heads: 8
-    vq: GVQ
+    vq: RVQ
     project_dim: 8
-    n_quantizers: 12
+    n_quantizers: 48
     bit_per_cbk: 10
     comp_law: power-law
     alpha: 0.5
